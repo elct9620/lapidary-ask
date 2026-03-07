@@ -30,7 +30,7 @@ export function registerAskHandler(
       env.INTERNAL_API_URL,
     );
     await event.channel.post({
-      markdown: `**Question**\n\n> ${question}\n\n${answer}`,
+      markdown: answer,
     });
   });
 }
