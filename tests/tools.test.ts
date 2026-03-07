@@ -59,12 +59,13 @@ describe("getNeighbors tool", () => {
     const tools = createTools(fetcher, "http://api.test");
 
     await tools.getNeighbors.execute(
-      { nodeId: "stdlib//irb", direction: undefined },
+      { nodeId: "stdlib//irb" },
       { toolCallId: "test", messages: [], abortSignal: undefined as never },
     );
 
     const calledUrl = mockFetch.mock.calls[0]![0] as string;
     expect(calledUrl).toContain("node_id=stdlib%3A%2F%2Firb");
+    expect(calledUrl).toContain("direction=both");
   });
 });
 

@@ -64,15 +64,11 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
         nodeId: z
           .string()
           .describe("Node ID (e.g., rubyist://matz, coremodule://String)"),
-        direction: z
-          .enum(["outbound", "inbound", "both"])
-          .optional()
-          .describe("Relationship direction filter"),
       }),
-      execute: async ({ nodeId, direction }) => {
+      execute: async ({ nodeId }) => {
         const params = new URLSearchParams();
         params.set("node_id", normalizeNodeId(nodeId));
-        if (direction) params.set("direction", direction);
+        params.set("direction", "both");
 
         try {
           const response = await fetcher.fetch(
