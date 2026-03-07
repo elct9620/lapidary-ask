@@ -507,10 +507,17 @@ describe("DiscordAdapter", () => {
   });
 
   describe("unsupported methods", () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    });
+
     it("editMessage warns and returns empty result", async () => {
       const adapter = createDiscordAdapter(TEST_CONFIG);
       const result = await adapter.editMessage("discord:g:c", "msg1", "test");
       expect(result.id).toBe("");
+      expect(warnSpy).toHaveBeenCalledOnce();
     });
 
     it("deleteMessage warns without throwing", async () => {
@@ -518,12 +525,14 @@ describe("DiscordAdapter", () => {
       await expect(
         adapter.deleteMessage("discord:g:c", "msg1"),
       ).resolves.toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledOnce();
     });
 
     it("fetchMessages returns empty array", async () => {
       const adapter = createDiscordAdapter(TEST_CONFIG);
       const result = await adapter.fetchMessages("discord:g:c");
       expect(result.messages).toEqual([]);
+      expect(warnSpy).toHaveBeenCalledOnce();
     });
 
     it("fetchThread returns stub info", async () => {
@@ -531,6 +540,7 @@ describe("DiscordAdapter", () => {
       const result = await adapter.fetchThread("discord:g:c");
       expect(result.id).toBe("discord:g:c");
       expect(result.isDM).toBe(false);
+      expect(warnSpy).toHaveBeenCalledOnce();
     });
 
     it("addReaction warns without throwing", async () => {
@@ -538,6 +548,7 @@ describe("DiscordAdapter", () => {
       await expect(
         adapter.addReaction("discord:g:c", "msg1", "👍"),
       ).resolves.toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledOnce();
     });
 
     it("removeReaction warns without throwing", async () => {
@@ -545,11 +556,13 @@ describe("DiscordAdapter", () => {
       await expect(
         adapter.removeReaction("discord:g:c", "msg1", "👍"),
       ).resolves.toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledOnce();
     });
 
     it("startTyping warns without throwing", async () => {
       const adapter = createDiscordAdapter(TEST_CONFIG);
       await expect(adapter.startTyping("discord:g:c")).resolves.toBeUndefined();
+      expect(warnSpy).toHaveBeenCalledOnce();
     });
 
     it("parseMessage throws", () => {
