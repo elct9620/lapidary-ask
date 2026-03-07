@@ -41,13 +41,14 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 
 ### `/ask` Command
 
-| Property            | Value                         |
-| ------------------- | ----------------------------- |
-| Command name        | `ask`                         |
-| Option              | `question` (string, required) |
-| Response visibility | Visible to the entire channel |
-| Response format     | Markdown                      |
-| Maximum LLM steps   | 15                            |
+| Property            | Value                                                                    |
+| ------------------- | ------------------------------------------------------------------------ |
+| Command name        | `ask`                                                                    |
+| Option              | `question` (string, required)                                            |
+| Response visibility | Visible to the entire channel                                            |
+| Response format     | Markdown                                                                 |
+| Maximum LLM steps   | 15                                                                       |
+| Max response length | 2000 characters (Discord limit); truncated with `...` suffix if exceeded |
 
 The bot acknowledges the interaction immediately via Discord's deferred response mechanism, then delegates processing to a Cloudflare Workflow. The Workflow invokes the LLM, formats the result, and patches the Discord response asynchronously.
 
@@ -86,10 +87,10 @@ The Knowledge Graph contains three node types and two relationship types:
 
 #### Tools
 
-| Tool           | Purpose                                                          | Parameters                                                                                 | Maps to Lapidary API   |
-| -------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------- |
-| `searchNodes`  | Search nodes by type and keyword                                 | `type?: "Rubyist" \| "CoreModule" \| "Stdlib"`, `query?: string`                           | `GET /graph/nodes`     |
-| `getNeighbors` | Get all nodes connected to a given node with their relationships | `nodeId: string` (e.g., `Rubyist://matz`), `direction?: "outbound" \| "inbound" \| "both"` | `GET /graph/neighbors` |
+| Tool           | Purpose                                                                             | Parameters                                                       | Maps to Lapidary API   |
+| -------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------- |
+| `searchNodes`  | Search nodes by type and keyword                                                    | `type?: "Rubyist" \| "CoreModule" \| "Stdlib"`, `query?: string` | `GET /graph/nodes`     |
+| `getNeighbors` | Get all nodes connected to a given node in both directions with their relationships | `nodeId: string` (e.g., `Rubyist://matz`)                        | `GET /graph/neighbors` |
 
 Each tool returns structured data that the LLM formats into a Markdown response.
 
