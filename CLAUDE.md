@@ -66,3 +66,4 @@ The `vitest.config.ts` configures SSR optimization for `discord-api-types` and `
 | `DISCORD_APPLICATION_ID` | Secret          | Discord app ID                     |
 | `OPENROUTER_API_KEY`     | Secret          | OpenRouter API auth                |
 | `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API (VPC) |
+| `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests |

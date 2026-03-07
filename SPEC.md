@@ -67,7 +67,7 @@ The LLM receives the user's question and a set of tools for querying the Lapidar
 
 ### Lapidary Knowledge Graph Integration
 
-The bot accesses the Lapidary API through a Cloudflare VPC Binding (`env.INTERNAL_API`). All API calls use `env.INTERNAL_API.fetch()` instead of public HTTP endpoints.
+The bot accesses the Lapidary API through a Cloudflare VPC Binding (`env.INTERNAL_API`). All API calls use `env.INTERNAL_API.fetch()` with URLs constructed from the `INTERNAL_API_URL` base URL (e.g., `${INTERNAL_API_URL}/graph/nodes`).
 
 #### Data Model
 
@@ -132,6 +132,7 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | `DISCORD_APPLICATION_ID` | Secret          | Discord application identifier      |
 | `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication       |
 | `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API access |
+| `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests  |
 
 ## Terminology
 
