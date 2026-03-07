@@ -2,7 +2,7 @@ import {
   WorkflowEntrypoint,
   type WorkflowEvent,
   type WorkflowStep,
-} from "cloudflare:workflows";
+} from "cloudflare:workers";
 import { askLLM } from "../agent";
 import { formatForDiscord } from "../format";
 

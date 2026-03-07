@@ -1,2 +1,17 @@
+import { Hono } from "hono";
+import { env } from "cloudflare:workers";
+import { handleDiscordWebhook } from "./discord";
+
 export { AskWorkflow } from "./workflows/ask";
-export { default } from "./app";
+
+const app = new Hono();
+
+app.get("/", (c) => {
+  return c.json({ status: "ok" });
+});
+
+app.post("/api/webhooks/discord", async (c) => {
+  return handleDiscordWebhook(c.req.raw, c.executionCtx, env);
+});
+
+export default app;
