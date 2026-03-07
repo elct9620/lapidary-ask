@@ -16,7 +16,7 @@ export async function askLLM(
     system: SYSTEM_PROMPT,
     prompt: question,
     tools,
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(15),
   });
   return text || "No response.";
 }
