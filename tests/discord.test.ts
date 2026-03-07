@@ -150,6 +150,7 @@ describe("handleDiscordWebhook", () => {
     const workflowCreate = (mockEnv.ASK_WORKFLOW as any).create;
     expect(workflowCreate).toHaveBeenCalledOnce();
     expect(workflowCreate).toHaveBeenCalledWith({
+      id: "interaction-1",
       params: {
         question: "What is Ruby?",
         interactionToken: "test-token",

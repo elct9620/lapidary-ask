@@ -72,6 +72,7 @@ async function handleAskCommand(
   env: Env,
 ): Promise<void> {
   const question = getStringOption(interaction, "question");
+  const interactionId = interaction.id as string;
   const interactionToken = interaction.token as string;
   const applicationId = env.DISCORD_APPLICATION_ID;
 
@@ -83,6 +84,7 @@ async function handleAskCommand(
   }
 
   await env.ASK_WORKFLOW.create({
+    id: interactionId,
     params: {
       question,
       interactionToken,
