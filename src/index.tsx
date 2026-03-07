@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { env } from "cloudflare:workers";
 import { Chat } from "chat";
-import { createDiscordAdapter } from "@chat-adapter/discord";
+import { createDiscordAdapter } from "./adapter/discord";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { askLLM } from "./llm";
 import { getStringOption } from "./discord-helpers";

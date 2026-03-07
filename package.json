@@ -13,11 +13,13 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@chat-adapter/discord": "^4.17.0",
+    "@chat-adapter/shared": "^4.17.0",
     "@chat-adapter/state-memory": "^4.17.0",
     "@openrouter/ai-sdk-provider": "^2.2.5",
     "ai": "^6.0.116",
     "chat": "^4.17.0",
+    "discord-api-types": "^0.38.41",
+    "discord-interactions": "^4.4.0",
     "hono": "^4.12.5",
     "zod": "^4.3.6"
   },
@@ -25,7 +27,6 @@
     "@cloudflare/vitest-pool-workers": "^0.12.20",
     "@types/node": "^25.3.5",
     "@vitest/coverage-istanbul": "3.2.4",
-    "discord-api-types": "^0.38.41",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
