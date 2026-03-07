@@ -1,0 +1,4 @@
+DISCORD_BOT_TOKEN=your-bot-token
+DISCORD_PUBLIC_KEY=your-public-key
+DISCORD_APPLICATION_ID=your-application-id
+OPENROUTER_API_KEY=your-openrouter-api-key

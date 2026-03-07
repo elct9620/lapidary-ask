@@ -1,11 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ruby-lapidary-ask",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-03-07"
-  // "compatibility_flags": [
-  //   "nodejs_compat"
-  // ],
+  "main": "src/index.tsx",
+  "compatibility_date": "2026-03-07",
+  "compatibility_flags": ["nodejs_compat"],
   // "vars": {
   //   "MY_VAR": "my-variable"
   // },

@@ -4,12 +4,24 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "register": "tsx scripts/register.ts",
+    "register:clear": "tsx scripts/register.ts --clear"
   },
   "dependencies": {
-    "hono": "^4.12.5"
+    "@chat-adapter/discord": "^4.17.0",
+    "@chat-adapter/state-memory": "^4.17.0",
+    "@openrouter/ai-sdk-provider": "^2.2.5",
+    "ai": "^6.0.116",
+    "chat": "^4.17.0",
+    "hono": "^4.12.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/node": "^25.3.5",
+    "discord-api-types": "^0.38.41",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.4.0"
   }
