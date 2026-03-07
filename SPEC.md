@@ -60,7 +60,7 @@ The system uses OpenRouter to access free-tier LLM models via the Vercel AI SDK 
 | ---------------------- | ----------------------------------------- |
 | Provider               | OpenRouter                                |
 | Model                  | `openrouter/free`                         |
-| System prompt language | Traditional Chinese (Taiwan)              |
+| System prompt language | English                                   |
 | Tool calling           | Enabled, up to 15 steps                   |
 | Response language      | Matches user question language by default |
 
@@ -128,15 +128,15 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 
 ### Environment Bindings
 
-| Binding                  | Type            | Purpose                                      |
-| ------------------------ | --------------- | -------------------------------------------- |
-| `DISCORD_BOT_TOKEN`      | Secret          | Discord bot authentication                   |
-| `DISCORD_PUBLIC_KEY`     | Secret          | Webhook signature verification               |
-| `DISCORD_APPLICATION_ID` | Secret          | Discord application identifier               |
-| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication                |
-| `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API access          |
-| `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests           |
-| `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow for async LLM processing |
+| Binding                  | Type            | Purpose                                                                                         |
+| ------------------------ | --------------- | ----------------------------------------------------------------------------------------------- |
+| `DISCORD_BOT_TOKEN`      | Secret          | Discord bot authentication                                                                      |
+| `DISCORD_PUBLIC_KEY`     | Secret          | Webhook signature verification                                                                  |
+| `DISCORD_APPLICATION_ID` | Secret          | Discord application identifier                                                                  |
+| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication                                                                   |
+| `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API access                                                             |
+| `INTERNAL_API_URL`       | Secret          | Base URL for Lapidary API requests (configured via Cloudflare dashboard, not in wrangler.jsonc) |
+| `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow for async LLM processing                                                    |
 
 ## Terminology
 
