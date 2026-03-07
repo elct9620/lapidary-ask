@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:hono.dev)",
+      "WebFetch(domain:vitest.dev)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:pnpm.io)",
+      "WebFetch(domain:vite.dev)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm --version:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm test:coverage:*)",
+      "Bash(pnpm cf-typegen:*)",
+      "Bash(node --version:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm why:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm format:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm ls:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | xargs pnpm exec prettier --write"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledMcpjsonServers": ["cloudflare"]
+}
