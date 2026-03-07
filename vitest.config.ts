@@ -21,11 +21,6 @@ export default defineWorkersConfig({
         wrangler: {
           configPath: "./wrangler.jsonc",
         },
-        miniflare: {
-          serviceBindings: {
-            INTERNAL_API: () => new Response(null, { status: 501 }),
-          },
-        },
       },
     },
   },

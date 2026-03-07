@@ -43,7 +43,6 @@
     {
       "binding": "INTERNAL_API",
       "service_id": "019cbdf8-7f54-7ae0-83b9-d8563fc31c65",
-      "remote": true,
     },
   ],
 }
