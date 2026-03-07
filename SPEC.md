@@ -58,7 +58,7 @@ The system uses OpenRouter to access free-tier LLM models via the Vercel AI SDK 
 | Property               | Value                                     |
 | ---------------------- | ----------------------------------------- |
 | Provider               | OpenRouter                                |
-| Model                  | `openrouter/auto`                         |
+| Model                  | `openrouter/free`                         |
 | System prompt language | Traditional Chinese (Taiwan)              |
 | Tool calling           | Enabled, up to 5 steps                    |
 | Response language      | Matches user question language by default |

@@ -9,7 +9,7 @@ export async function askLLM(
 ): Promise<string> {
   const openrouter = createOpenRouter({ apiKey });
   const { text } = await generateText({
-    model: openrouter("openrouter/auto"),
+    model: openrouter("openrouter/free"),
     system: SYSTEM_PROMPT,
     prompt: question,
     tools,
