@@ -7,6 +7,8 @@
     "cf-typegen": "wrangler types",
     "register": "tsx scripts/register.ts",
     "register:clear": "tsx scripts/register.ts --clear",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -20,11 +22,14 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.20",
     "@types/node": "^25.3.5",
+    "@vitest/coverage-istanbul": "3.2.4",
     "discord-api-types": "^0.38.41",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "vitest": "3.2.4",
     "wrangler": "^4.4.0"
   }
 }

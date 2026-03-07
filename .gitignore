@@ -29,6 +29,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# test
+coverage/
+
 # misc
 .DS_Store
 tmp/
