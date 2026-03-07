@@ -3,6 +3,8 @@ import { getStringOption } from "../adapter/discord";
 
 interface AskHandlerEnv {
   OPENROUTER_API_KEY: string;
+  INTERNAL_API: Fetcher;
+  INTERNAL_API_HOSTNAME: string;
 }
 
 export function registerAskHandler(
@@ -21,7 +23,12 @@ export function registerAskHandler(
       return;
     }
 
-    const answer = await askLLM(question, env.OPENROUTER_API_KEY);
+    const answer = await askLLM(
+      question,
+      env.OPENROUTER_API_KEY,
+      env.INTERNAL_API,
+      env.INTERNAL_API_HOSTNAME,
+    );
     await event.channel.post({
       markdown: `**Question**\n\n> ${question}\n\n${answer}`,
     });

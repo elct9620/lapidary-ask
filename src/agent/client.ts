@@ -1,13 +1,16 @@
 import { generateText, stepCountIs } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { SYSTEM_PROMPT } from "./prompt";
-import { tools } from "./tools";
+import { createTools } from "./tools";
 
 export async function askLLM(
   question: string,
   apiKey: string,
+  internalApi: Fetcher,
+  internalApiHostname: string,
 ): Promise<string> {
   const openrouter = createOpenRouter({ apiKey });
+  const tools = createTools(internalApi, internalApiHostname);
   const { text } = await generateText({
     model: openrouter("openrouter/free"),
     system: SYSTEM_PROMPT,

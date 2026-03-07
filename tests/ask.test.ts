@@ -69,6 +69,13 @@ async function makeSignedRequest(url: string, body: object): Promise<Request> {
 const TEST_APP_ID = "test-app-id";
 const TEST_BOT_TOKEN = "test-bot-token";
 const TEST_API_KEY = "test-openrouter-key";
+const TEST_INTERNAL_API_HOSTNAME = "internal-api.test";
+const mockInternalApi = {
+  fetch: vi.fn(),
+  connect: vi.fn(),
+  queue: vi.fn(),
+  scheduled: vi.fn(),
+} as unknown as Fetcher;
 
 let bot: ReturnType<typeof createBot>;
 
@@ -87,6 +94,8 @@ beforeEach(() => {
     DISCORD_PUBLIC_KEY: TEST_PUBLIC_KEY_HEX,
     DISCORD_APPLICATION_ID: TEST_APP_ID,
     OPENROUTER_API_KEY: TEST_API_KEY,
+    INTERNAL_API: mockInternalApi,
+    INTERNAL_API_HOSTNAME: TEST_INTERNAL_API_HOSTNAME,
   });
 
   mockGenerateText.mockReset();
