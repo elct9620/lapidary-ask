@@ -6,7 +6,9 @@
     "deploy": "wrangler deploy --minify",
     "cf-typegen": "wrangler types",
     "register": "tsx scripts/register.ts",
-    "register:clear": "tsx scripts/register.ts --clear"
+    "register:clear": "tsx scripts/register.ts --clear",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@chat-adapter/discord": "^4.17.0",
