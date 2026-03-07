@@ -1,3 +1,4 @@
 node_modules
 pnpm-lock.yaml
 tmp
+worker-configuration.d.ts
