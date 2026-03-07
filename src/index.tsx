@@ -34,7 +34,7 @@ bot.onSlashCommand("/ask", async (event) => {
 const app = new Hono();
 
 app.get("/", (c) => {
-  return c.text("Lapidary Ask Bot");
+  return c.json({ status: "ok" });
 });
 
 app.post("/api/webhooks/discord", async (c) => {
