@@ -27,18 +27,35 @@ Discord command registration reads credentials from `.dev.vars` file.
 
 ## Architecture
 
-- **Runtime**: Cloudflare Workers with Hono framework
-- **Entry point**: `src/index.tsx` — Hono app with Discord webhook endpoint at `POST /api/webhooks/discord`
-- **Bot framework**: `chat` package with `@chat-adapter/discord` adapter handles Discord interaction verification and deferred responses
-- **LLM**: `src/llm.ts` — Uses Vercel AI SDK (`ai`) with OpenRouter provider, model `openrouter/auto`, system prompt in Traditional Chinese
-- **Tools**: `src/tools.ts` — AI SDK tool definitions for querying Lapidary Knowledge Graph (currently empty, to be implemented per SPEC.md)
-- **Discord helpers**: `src/discord-helpers.ts` — Extracts typed options from Discord slash command interactions
+The project follows a layered architecture under `src/`:
+
+- **Entry point**: `src/index.tsx` — Hono app with health check (`GET /`) and Discord webhook (`POST /api/webhooks/discord`)
+- **Bot setup**: `src/bot.ts` — Creates `Chat` instance, wires Discord adapter and registers command handlers
+- **Handlers**: `src/handlers/` — Command handlers (e.g., `ask.ts` registers the `/ask` slash command handler)
+- **Agent (LLM)**: `src/agent/` — LLM integration layer
+  - `client.ts` — `askLLM()` function using Vercel AI SDK with OpenRouter (`openrouter/auto`)
+  - `tools.ts` — AI SDK tool definitions for querying Lapidary Knowledge Graph (to be implemented per SPEC.md)
+  - `prompt.ts` — System prompt in Traditional Chinese
+- **Discord adapter**: `src/adapter/discord/` — Custom Discord adapter implementing the `chat` package's `Adapter` interface
+  - `adapter.ts` — Webhook verification, interaction handling, deferred responses via `AsyncLocalStorage`
+  - `helpers.ts` — Extracts typed options from slash command interactions
+  - `format.ts` — Discord message formatting
 - **Command definitions**: `src/commands.ts` — Discord slash command registration metadata
 - **Registration script**: `scripts/register.ts` — Registers/clears slash commands via Discord API
+
+### Request Flow
+
+1. Discord sends webhook → Hono route → `bot.webhooks.discord()`
+2. `DiscordAdapter` verifies signature, defers response, dispatches to `Chat`
+3. `Chat` triggers the registered `/ask` handler in `src/handlers/ask.ts`
+4. Handler calls `askLLM()` which invokes OpenRouter with tools
+5. Response posted back via Discord interaction webhook (PATCH for initial, POST for follow-ups)
 
 ## Testing
 
 Tests use Vitest with `@cloudflare/vitest-pool-workers` to run in a Workers-like environment. Coverage uses Istanbul provider. Test files go in `tests/` directory. Config references `wrangler.jsonc` for worker pool options.
+
+The `vitest.config.ts` configures SSR optimization for `discord-api-types` and `discord-interactions` packages to work in the Workers environment.
 
 ## Key Bindings
 
