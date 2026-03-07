@@ -1,6 +1,26 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 
+const typeMap: Record<string, string> = {
+  rubyist: "Rubyist",
+  coremodule: "CoreModule",
+  stdlib: "Stdlib",
+};
+
+export function normalizeNodeId(nodeId: string): string {
+  // Fix separator: "stdlib//irb" → "stdlib://irb"
+  const normalized = nodeId.replace(/^([^:]+)\/\//, "$1://");
+  // Fix type casing
+  return normalized.replace(/^([^:]+):\/\//, (_, type) => {
+    const lower = type.toLowerCase();
+    return `${typeMap[lower] ?? type}://`;
+  });
+}
+
+export function normalizeType(type: string): string {
+  return typeMap[type.toLowerCase()] ?? type;
+}
+
 export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
   return {
     searchNodes: tool({
@@ -15,7 +35,7 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
       }),
       execute: async ({ type, query }) => {
         const params = new URLSearchParams();
-        if (type) params.set("type", type);
+        if (type) params.set("type", normalizeType(type));
         if (query) params.set("query", query);
 
         try {
@@ -52,7 +72,7 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
       }),
       execute: async ({ nodeId, direction }) => {
         const params = new URLSearchParams();
-        params.set("nodeId", nodeId);
+        params.set("nodeId", normalizeNodeId(nodeId));
         if (direction) params.set("direction", direction);
 
         try {
