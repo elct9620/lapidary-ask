@@ -73,7 +73,7 @@ export class DiscordAdapter implements Adapter<DiscordThreadId, unknown> {
 
   constructor(config: DiscordAdapterConfig) {
     this.botToken = config.botToken;
-    this.publicKey = config.publicKey.trim().toLowerCase();
+    this.publicKey = config.publicKey;
     this.applicationId = config.applicationId;
     this.botUserId = config.applicationId;
     this.userName = "bot";
