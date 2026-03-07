@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import app from "../src/index";
+import app from "../src/app";
 
 describe("GET /", () => {
   it("returns JSON health check response", async () => {

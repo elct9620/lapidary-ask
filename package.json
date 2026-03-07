@@ -13,11 +13,8 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@chat-adapter/shared": "^4.17.0",
-    "@chat-adapter/state-memory": "^4.17.0",
     "@openrouter/ai-sdk-provider": "^2.2.5",
     "ai": "^6.0.116",
-    "chat": "^4.17.0",
     "discord-api-types": "^0.38.41",
     "discord-interactions": "^4.4.0",
     "hono": "^4.12.5",

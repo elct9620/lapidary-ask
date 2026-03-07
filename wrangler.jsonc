@@ -29,6 +29,13 @@
   // "ai": {
   //   "binding": "AI"
   // },
+  "workflows": [
+    {
+      "binding": "ASK_WORKFLOW",
+      "name": "lapidary-ask-workflow",
+      "class_name": "AskWorkflow",
+    },
+  ],
   "observability": {
     "enabled": true,
   },
