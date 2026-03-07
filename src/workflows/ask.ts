@@ -36,9 +36,15 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         },
       );
     } catch (error) {
-      await this.patchDiscordResponse(applicationId, interactionToken, {
-        content: "LLM processing failed. Please try again later.",
-      });
+      await step.do(
+        "report-llm-error",
+        { retries: { limit: 0, delay: "1 second" } },
+        async () => {
+          await this.patchDiscordResponse(applicationId, interactionToken, {
+            content: "LLM processing failed. Please try again later.",
+          });
+        },
+      );
       return;
     }
 
@@ -54,9 +60,15 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         },
       );
     } catch (error) {
-      await this.patchDiscordResponse(applicationId, interactionToken, {
-        content: "Failed to post response. Please try again later.",
-      });
+      await step.do(
+        "report-post-error",
+        { retries: { limit: 0, delay: "1 second" } },
+        async () => {
+          await this.patchDiscordResponse(applicationId, interactionToken, {
+            content: "Failed to post response. Please try again later.",
+          });
+        },
+      );
     }
   }
 
