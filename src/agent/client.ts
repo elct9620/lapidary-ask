@@ -1,8 +1,7 @@
 import { generateText, stepCountIs } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { SYSTEM_PROMPT } from "./prompt";
 import { tools } from "./tools";
-
-const SYSTEM_PROMPT = `你是一個友善的 AI 助手。請使用繁體中文回答問題。`;
 
 export async function askLLM(
   question: string,
