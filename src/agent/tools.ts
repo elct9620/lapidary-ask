@@ -1,7 +1,7 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 
-export function createTools(fetcher: Fetcher, hostname: string): ToolSet {
+export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
   return {
     searchNodes: tool({
       description:
@@ -20,7 +20,7 @@ export function createTools(fetcher: Fetcher, hostname: string): ToolSet {
 
         try {
           const response = await fetcher.fetch(
-            `http://${hostname}/graph/nodes?${params.toString()}`,
+            `${baseUrl}/graph/nodes?${params.toString()}`,
           );
 
           if (response.ok) {
@@ -57,7 +57,7 @@ export function createTools(fetcher: Fetcher, hostname: string): ToolSet {
 
         try {
           const response = await fetcher.fetch(
-            `http://${hostname}/graph/neighbors?${params.toString()}`,
+            `${baseUrl}/graph/neighbors?${params.toString()}`,
           );
 
           if (response.ok) {

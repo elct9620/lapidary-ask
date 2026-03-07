@@ -9,7 +9,7 @@ interface BotEnv {
   DISCORD_APPLICATION_ID: string;
   OPENROUTER_API_KEY: string;
   INTERNAL_API: Fetcher;
-  INTERNAL_API_HOSTNAME: string;
+  INTERNAL_API_URL: string;
 }
 
 export function createBot(env: BotEnv) {

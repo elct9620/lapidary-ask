@@ -7,10 +7,10 @@ export async function askLLM(
   question: string,
   apiKey: string,
   internalApi: Fetcher,
-  internalApiHostname: string,
+  internalApiUrl: string,
 ): Promise<string> {
   const openrouter = createOpenRouter({ apiKey });
-  const tools = createTools(internalApi, internalApiHostname);
+  const tools = createTools(internalApi, internalApiUrl);
   const { text } = await generateText({
     model: openrouter("openrouter/free"),
     system: SYSTEM_PROMPT,
