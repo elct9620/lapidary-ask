@@ -87,10 +87,10 @@ The Knowledge Graph contains three node types and two relationship types:
 
 #### Tools
 
-| Tool           | Purpose                                                                             | Parameters                                                       | Maps to Lapidary API   |
-| -------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------- |
-| `searchNodes`  | Search nodes by type and keyword                                                    | `type?: "Rubyist" \| "CoreModule" \| "Stdlib"`, `query?: string` | `GET /graph/nodes`     |
-| `getNeighbors` | Get all nodes connected to a given node in both directions with their relationships | `nodeId: string` (e.g., `Rubyist://matz`)                        | `GET /graph/neighbors` |
+| Tool           | Purpose                                                                             | Parameters                                                                      | Maps to Lapidary API   |
+| -------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------- |
+| `searchNodes`  | Search nodes by type and keyword                                                    | `type?: "Rubyist" \| "CoreModule" \| "Stdlib"`, `query?: string`                | `GET /graph/nodes`     |
+| `getNeighbors` | Get all nodes connected to a given node in both directions with their relationships | `nodeId: string` (e.g., `Rubyist://matz`); always queries with `direction=both` | `GET /graph/neighbors` |
 
 Each tool returns structured data that the LLM formats into a Markdown response.
 

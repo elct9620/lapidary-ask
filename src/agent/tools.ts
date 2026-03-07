@@ -50,6 +50,10 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
             return { error: "Invalid parameters provided." };
           }
 
+          if (response.status === 404) {
+            return { error: "The requested node does not exist." };
+          }
+
           return { error: "Service is temporarily unavailable." };
         } catch {
           return { error: "Service is unreachable." };

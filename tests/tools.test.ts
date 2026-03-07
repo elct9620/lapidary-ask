@@ -87,4 +87,36 @@ describe("searchNodes tool", () => {
     expect(calledUrl).toContain("type=Stdlib");
     expect(calledUrl).toContain("q=irb");
   });
+
+  it("returns error message when API responds with 404", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    });
+    const fetcher = { fetch: mockFetch } as unknown as Fetcher;
+    const tools = createTools(fetcher, "http://api.test");
+
+    const result = await tools.searchNodes.execute(
+      { type: "Rubyist", query: "unknown" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as never },
+    );
+
+    expect(result).toEqual({ error: "The requested node does not exist." });
+  });
+
+  it("returns error message when API responds with 500", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    });
+    const fetcher = { fetch: mockFetch } as unknown as Fetcher;
+    const tools = createTools(fetcher, "http://api.test");
+
+    const result = await tools.searchNodes.execute(
+      { type: "Rubyist", query: "matz" },
+      { toolCallId: "test", messages: [], abortSignal: undefined as never },
+    );
+
+    expect(result).toEqual({ error: "Service is temporarily unavailable." });
+  });
 });

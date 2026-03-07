@@ -65,7 +65,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         { retries: { limit: 0, delay: "1 second" } },
         async () => {
           await this.patchDiscordResponse(applicationId, interactionToken, {
-            content: "Failed to post response. Please try again later.",
+            content: "LLM processing failed. Please try again later.",
           });
         },
       );
