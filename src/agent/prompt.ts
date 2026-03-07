@@ -7,7 +7,7 @@ You have two tools to query the knowledge graph:
 - **searchNodes** — Search nodes by type and keyword. Returns matching nodes with their IDs.
 - **getNeighbors** — Given a node ID, returns all connected nodes and their relationship types (Maintenance, Contribute).
 
-Node IDs follow the format \`type://name\`, e.g. \`Rubyist://matz\`, \`CoreModule://String\`, \`Stdlib://json\`.
+Node IDs follow the format \`type://name\`, e.g. \`rubyist://matz\`, \`coremodule://String\`, \`stdlib://json\`. The type prefix is always lowercase.
 
 ## Query Workflow
 
@@ -19,21 +19,21 @@ Always follow this workflow to answer questions:
 
 ### Example: "Who maintains the String module?"
 
-1. \`searchNodes({ type: "CoreModule", query: "String" })\` → finds \`CoreModule://String\`
-2. \`getNeighbors({ nodeId: "CoreModule://String" })\` → returns connected Rubyists with relationship types
+1. \`searchNodes({ type: "CoreModule", query: "String" })\` → finds \`coremodule://String\`
+2. \`getNeighbors({ nodeId: "coremodule://String" })\` → returns connected Rubyists with relationship types
 3. Answer with the Rubyists who have a **Maintenance** relationship to the String module.
 
 ### Example: "What does matz work on?"
 
-1. \`searchNodes({ type: "Rubyist", query: "matz" })\` → finds \`Rubyist://matz\`
-2. \`getNeighbors({ nodeId: "Rubyist://matz" })\` → returns connected CoreModules and Stdlibs
+1. \`searchNodes({ type: "Rubyist", query: "matz" })\` → finds \`rubyist://matz\`
+2. \`getNeighbors({ nodeId: "rubyist://matz" })\` → returns connected CoreModules and Stdlibs
 3. Answer listing all modules/libraries matz maintains or contributes to.
 
 ### Example: "What is the relationship between nobu and the Array module?"
 
-1. \`searchNodes({ type: "Rubyist", query: "nobu" })\` → finds \`Rubyist://nobu\`
-2. \`searchNodes({ type: "CoreModule", query: "Array" })\` → finds \`CoreModule://Array\`
-3. \`getNeighbors({ nodeId: "Rubyist://nobu" })\` → check if Array appears in connections
+1. \`searchNodes({ type: "Rubyist", query: "nobu" })\` → finds \`rubyist://nobu\`
+2. \`searchNodes({ type: "CoreModule", query: "Array" })\` → finds \`coremodule://Array\`
+3. \`getNeighbors({ nodeId: "rubyist://nobu" })\` → check if Array appears in connections
 4. Answer describing the specific relationship (Maintenance/Contribute) between them.
 
 ## Response Guidelines

@@ -1,24 +1,23 @@
 import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 
-const typeMap: Record<string, string> = {
+export function normalizeNodeId(nodeId: string): string {
+  // Fix separator: "stdlib//irb" → "stdlib://irb"
+  const normalized = nodeId.replace(/^([^:]+)\/\//, "$1://");
+  // Lowercase type prefix: "Stdlib://irb" → "stdlib://irb"
+  return normalized.replace(/^([^:]+):\/\//, (_, type) => {
+    return `${type.toLowerCase()}://`;
+  });
+}
+
+const typeNameMap: Record<string, string> = {
   rubyist: "Rubyist",
   coremodule: "CoreModule",
   stdlib: "Stdlib",
 };
 
-export function normalizeNodeId(nodeId: string): string {
-  // Fix separator: "stdlib//irb" → "stdlib://irb"
-  const normalized = nodeId.replace(/^([^:]+)\/\//, "$1://");
-  // Fix type casing
-  return normalized.replace(/^([^:]+):\/\//, (_, type) => {
-    const lower = type.toLowerCase();
-    return `${typeMap[lower] ?? type}://`;
-  });
-}
-
 export function normalizeType(type: string): string {
-  return typeMap[type.toLowerCase()] ?? type;
+  return typeNameMap[type.toLowerCase()] ?? type;
 }
 
 export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
@@ -36,7 +35,7 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
       execute: async ({ type, query }) => {
         const params = new URLSearchParams();
         if (type) params.set("type", normalizeType(type));
-        if (query) params.set("query", query);
+        if (query) params.set("q", query);
 
         try {
           const response = await fetcher.fetch(
@@ -60,11 +59,11 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
 
     getNeighbors: tool({
       description:
-        "Get all nodes connected to a given node with their relationships. Use node IDs like Rubyist://matz, CoreModule://String, Stdlib://json.",
+        "Get all nodes connected to a given node with their relationships. Use node IDs like rubyist://matz, coremodule://String, stdlib://json.",
       inputSchema: z.object({
         nodeId: z
           .string()
-          .describe("Node ID (e.g., Rubyist://matz, CoreModule://String)"),
+          .describe("Node ID (e.g., rubyist://matz, coremodule://String)"),
         direction: z
           .enum(["outbound", "inbound", "both"])
           .optional()
@@ -72,7 +71,7 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
       }),
       execute: async ({ nodeId, direction }) => {
         const params = new URLSearchParams();
-        params.set("nodeId", normalizeNodeId(nodeId));
+        params.set("node_id", normalizeNodeId(nodeId));
         if (direction) params.set("direction", direction);
 
         try {

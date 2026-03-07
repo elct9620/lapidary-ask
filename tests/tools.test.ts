@@ -6,45 +6,45 @@ import {
 } from "../src/agent/tools";
 
 describe("normalizeNodeId", () => {
-  it('fixes missing colon: "stdlib//irb" → "Stdlib://irb"', () => {
-    expect(normalizeNodeId("stdlib//irb")).toBe("Stdlib://irb");
+  it('fixes missing colon: "stdlib//irb" → "stdlib://irb"', () => {
+    expect(normalizeNodeId("stdlib//irb")).toBe("stdlib://irb");
   });
 
-  it("leaves correct format unchanged", () => {
-    expect(normalizeNodeId("Stdlib://irb")).toBe("Stdlib://irb");
+  it("lowercases type prefix", () => {
+    expect(normalizeNodeId("Stdlib://irb")).toBe("stdlib://irb");
   });
 
-  it("fixes rubyist casing", () => {
-    expect(normalizeNodeId("rubyist://matz")).toBe("Rubyist://matz");
+  it("lowercases Rubyist prefix", () => {
+    expect(normalizeNodeId("Rubyist://matz")).toBe("rubyist://matz");
   });
 
-  it("fixes coremodule casing", () => {
-    expect(normalizeNodeId("coremodule://String")).toBe("CoreModule://String");
+  it("lowercases CoreModule prefix", () => {
+    expect(normalizeNodeId("CoreModule://String")).toBe("coremodule://String");
   });
 
-  it("preserves unknown types", () => {
-    expect(normalizeNodeId("Unknown://foo")).toBe("Unknown://foo");
+  it("lowercases unknown types", () => {
+    expect(normalizeNodeId("Unknown://foo")).toBe("unknown://foo");
+  });
+
+  it("preserves name part casing", () => {
+    expect(normalizeNodeId("coremodule://String")).toBe("coremodule://String");
   });
 });
 
 describe("normalizeType", () => {
-  it("normalizes stdlib", () => {
+  it("capitalizes stdlib", () => {
     expect(normalizeType("stdlib")).toBe("Stdlib");
   });
 
-  it("normalizes rubyist", () => {
-    expect(normalizeType("rubyist")).toBe("Rubyist");
-  });
-
-  it("normalizes coremodule", () => {
-    expect(normalizeType("coremodule")).toBe("CoreModule");
-  });
-
-  it("preserves already correct type", () => {
+  it("preserves Rubyist casing", () => {
     expect(normalizeType("Rubyist")).toBe("Rubyist");
   });
 
-  it("preserves unknown type", () => {
+  it("fixes coremodule to CoreModule", () => {
+    expect(normalizeType("coremodule")).toBe("CoreModule");
+  });
+
+  it("passes through unknown type as-is", () => {
     expect(normalizeType("Unknown")).toBe("Unknown");
   });
 });
@@ -64,7 +64,7 @@ describe("getNeighbors tool", () => {
     );
 
     const calledUrl = mockFetch.mock.calls[0]![0] as string;
-    expect(calledUrl).toContain("nodeId=Stdlib%3A%2F%2Firb");
+    expect(calledUrl).toContain("node_id=stdlib%3A%2F%2Firb");
   });
 });
 
@@ -84,5 +84,6 @@ describe("searchNodes tool", () => {
 
     const calledUrl = mockFetch.mock.calls[0]![0] as string;
     expect(calledUrl).toContain("type=Stdlib");
+    expect(calledUrl).toContain("q=irb");
   });
 });
