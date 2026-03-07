@@ -47,9 +47,9 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 | Option              | `question` (string, required) |
 | Response visibility | Visible to the entire channel |
 | Response format     | Markdown                      |
-| Maximum LLM steps   | 5                             |
+| Maximum LLM steps   | 15                            |
 
-The bot acknowledges the interaction immediately via Discord's deferred response mechanism, then processes the question asynchronously.
+The bot acknowledges the interaction immediately via Discord's deferred response mechanism, then delegates processing to a Cloudflare Workflow. The Workflow invokes the LLM, formats the result, and patches the Discord response asynchronously.
 
 ### LLM Processing
 
@@ -60,7 +60,7 @@ The system uses OpenRouter to access free-tier LLM models via the Vercel AI SDK 
 | Provider               | OpenRouter                                |
 | Model                  | `openrouter/free`                         |
 | System prompt language | Traditional Chinese (Taiwan)              |
-| Tool calling           | Enabled, up to 5 steps                    |
+| Tool calling           | Enabled, up to 15 steps                   |
 | Response language      | Matches user question language by default |
 
 The LLM receives the user's question and a set of tools for querying the Lapidary Knowledge Graph. It decides autonomously which tools to invoke (if any) and synthesizes results into a human-readable answer.
@@ -107,13 +107,15 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 
 ### Error Handling
 
-| Scenario                              | Behavior                                                                             |
-| ------------------------------------- | ------------------------------------------------------------------------------------ |
-| Missing `question` option             | Reply: "Please provide a question."                                                  |
-| OpenRouter API failure                | Reply with a generic error message indicating the service is temporarily unavailable |
-| INTERNAL_API / Lapidary API failure   | LLM receives an error from the tool and explains that data is currently unavailable  |
-| LLM returns empty response            | Reply: "No response."                                                                |
-| Discord interaction timeout (>15 min) | Response is silently dropped by Discord; no retry                                    |
+| Scenario                                 | Behavior                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| Missing `question` option                | Reply: "Please provide a question."                                                 |
+| OpenRouter API failure                   | Workflow retries the LLM step once; if still failing, reply with a generic error    |
+| INTERNAL_API / Lapidary API failure      | LLM receives an error from the tool and explains that data is currently unavailable |
+| LLM returns empty response               | Reply: "No response."                                                               |
+| Discord response post failure            | Workflow retries the response step up to 2 times before giving up                   |
+| Workflow failure (all retries exhausted) | Reply: "LLM processing failed. Please try again later."                             |
+| Discord interaction timeout (>15 min)    | Response is silently dropped by Discord; no retry                                   |
 
 ## System Boundaries
 
@@ -125,14 +127,15 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 
 ### Environment Bindings
 
-| Binding                  | Type            | Purpose                             |
-| ------------------------ | --------------- | ----------------------------------- |
-| `DISCORD_BOT_TOKEN`      | Secret          | Discord bot authentication          |
-| `DISCORD_PUBLIC_KEY`     | Secret          | Webhook signature verification      |
-| `DISCORD_APPLICATION_ID` | Secret          | Discord application identifier      |
-| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication       |
-| `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API access |
-| `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests  |
+| Binding                  | Type            | Purpose                                      |
+| ------------------------ | --------------- | -------------------------------------------- |
+| `DISCORD_BOT_TOKEN`      | Secret          | Discord bot authentication                   |
+| `DISCORD_PUBLIC_KEY`     | Secret          | Webhook signature verification               |
+| `DISCORD_APPLICATION_ID` | Secret          | Discord application identifier               |
+| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication                |
+| `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API access          |
+| `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests           |
+| `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow for async LLM processing |
 
 ## Terminology
 
@@ -150,9 +153,10 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 
 ## Runtime
 
-| Property  | Value                        |
-| --------- | ---------------------------- |
-| Platform  | Cloudflare Workers           |
-| Framework | Hono                         |
-| Language  | TypeScript                   |
-| AI SDK    | Vercel AI SDK (`ai` package) |
+| Property      | Value                        |
+| ------------- | ---------------------------- |
+| Platform      | Cloudflare Workers           |
+| Async runtime | Cloudflare Workflows         |
+| Framework     | Hono                         |
+| Language      | TypeScript                   |
+| AI SDK        | Vercel AI SDK (`ai` package) |
