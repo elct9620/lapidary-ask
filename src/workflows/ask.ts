@@ -26,11 +26,43 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       "check-guardrails",
       { retries: { limit: 0, delay: "1 second" } },
       async () => {
-        return await checkGuardrails({
+        let traceId: string | undefined;
+        let integration: LangfuseTelemetryIntegration | undefined;
+
+        if (this.env.LANGFUSE_PUBLIC_KEY && this.env.LANGFUSE_SECRET_KEY) {
+          integration = new LangfuseTelemetryIntegration({
+            publicKey: this.env.LANGFUSE_PUBLIC_KEY,
+            secretKey: this.env.LANGFUSE_SECRET_KEY,
+            baseUrl: this.env.LANGFUSE_BASE_URL,
+            environment: this.env.ENVIRONMENT,
+          });
+
+          traceId = integration.createTrace({
+            name: "ask-workflow",
+            input: { question, locale },
+          });
+        }
+
+        const startTime = new Date().toISOString();
+        const result = await checkGuardrails({
           question,
           apiKey: this.env.OPENROUTER_API_KEY,
           locale,
         });
+        const endTime = new Date().toISOString();
+
+        if (integration) {
+          integration.recordGuardrail({
+            name: "check-guardrails",
+            input: question,
+            output: result,
+            startTime,
+            endTime,
+          });
+          await integration.flush();
+        }
+
+        return { ...result, traceId };
       },
     );
 
@@ -61,6 +93,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
                     secretKey: this.env.LANGFUSE_SECRET_KEY,
                     baseUrl: this.env.LANGFUSE_BASE_URL,
                     environment: this.env.ENVIRONMENT,
+                    traceId: guardrails.traceId,
                   }),
                 ]
               : undefined;

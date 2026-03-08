@@ -14,6 +14,7 @@ export interface LangfuseConfig {
   secretKey: string;
   baseUrl?: string;
   environment?: string;
+  traceId?: string;
 }
 
 interface LangfuseEvent {
@@ -23,6 +24,21 @@ interface LangfuseEvent {
   body: Record<string, unknown>;
 }
 
+interface PendingToolCall {
+  id: string;
+  startTime: string;
+  input: unknown;
+}
+
+export interface RecordGuardrailOptions {
+  name: string;
+  input: unknown;
+  output: unknown;
+  startTime: string;
+  endTime: string;
+  metadata?: Record<string, unknown>;
+}
+
 export class LangfuseTelemetryIntegration implements TelemetryIntegration {
   private readonly publicKey: string;
   private readonly secretKey: string;
@@ -30,14 +46,18 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
   private readonly environment: string | undefined;
   private events: LangfuseEvent[] = [];
   private traceId: string | null = null;
+  private agentId: string | null = null;
   private generationIds: Map<number, string> = new Map();
-  private spanIds: Map<string, string> = new Map();
+  private pendingToolCalls: Map<string, PendingToolCall> = new Map();
 
   constructor(config: LangfuseConfig) {
     this.publicKey = config.publicKey;
     this.secretKey = config.secretKey;
     this.baseUrl = config.baseUrl ?? "https://cloud.langfuse.com";
     this.environment = config.environment;
+    if (config.traceId) {
+      this.traceId = config.traceId;
+    }
 
     this.onStart = this.onStart.bind(this);
     this.onStepStart = this.onStepStart.bind(this);
@@ -47,7 +67,15 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     this.onFinish = this.onFinish.bind(this);
   }
 
-  async onStart(event: OnStartEvent<ToolSet>): Promise<void> {
+  createTrace({
+    name,
+    input,
+    metadata,
+  }: {
+    name: string;
+    input: unknown;
+    metadata?: Record<string, unknown>;
+  }): string {
     this.traceId = crypto.randomUUID();
     this.events.push({
       id: crypto.randomUUID(),
@@ -55,104 +83,34 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       timestamp: new Date().toISOString(),
       body: {
         id: this.traceId,
-        name: "ai-generate-text",
-        input: event.prompt,
+        name,
+        input,
         environment: this.environment,
-        metadata: {
-          model: event.model?.modelId,
-          provider: event.model?.provider,
-        },
+        ...(metadata && { metadata }),
       },
     });
+    return this.traceId;
   }
 
-  async onStepStart(event: OnStepStartEvent<ToolSet>): Promise<void> {
-    const generationId = crypto.randomUUID();
-    const stepNumber = event.stepNumber ?? 0;
-    this.generationIds.set(stepNumber, generationId);
-
+  recordGuardrail(options: RecordGuardrailOptions): void {
     this.events.push({
       id: crypto.randomUUID(),
-      type: "generation-create",
+      type: "guardrail-create",
       timestamp: new Date().toISOString(),
       body: {
-        id: generationId,
+        id: crypto.randomUUID(),
         traceId: this.traceId,
-        name: `step-${stepNumber}`,
-        model: event.model?.modelId,
-        startTime: new Date().toISOString(),
+        name: options.name,
+        input: options.input,
+        output: options.output,
+        startTime: options.startTime,
+        endTime: options.endTime,
+        ...(options.metadata && { metadata: options.metadata }),
       },
     });
   }
 
-  async onToolCallStart(event: OnToolCallStartEvent<ToolSet>): Promise<void> {
-    const stepNumber = event.stepNumber ?? 0;
-    const spanId = crypto.randomUUID();
-    const parentGenerationId = this.generationIds.get(stepNumber);
-    const toolName = event.toolCall?.toolName ?? "unknown";
-
-    this.spanIds.set(`${stepNumber}:${toolName}`, spanId);
-
-    this.events.push({
-      id: crypto.randomUUID(),
-      type: "span-create",
-      timestamp: new Date().toISOString(),
-      body: {
-        id: spanId,
-        traceId: this.traceId,
-        parentObservationId: parentGenerationId,
-        name: toolName,
-        input: event.toolCall?.input,
-        startTime: new Date().toISOString(),
-      },
-    });
-  }
-
-  async onToolCallFinish(event: OnToolCallFinishEvent<ToolSet>): Promise<void> {
-    const stepNumber = event.stepNumber ?? 0;
-    const toolName = event.toolCall?.toolName ?? "unknown";
-    const spanId = this.spanIds.get(`${stepNumber}:${toolName}`);
-
-    this.events.push({
-      id: crypto.randomUUID(),
-      type: "span-update",
-      timestamp: new Date().toISOString(),
-      body: {
-        id: spanId,
-        traceId: this.traceId,
-        name: toolName,
-        output: event.success ? event.output : { error: event.error },
-        endTime: new Date().toISOString(),
-        metadata: {
-          durationMs: event.durationMs,
-          success: event.success,
-        },
-      },
-    });
-  }
-
-  async onStepFinish(event: OnStepFinishEvent<ToolSet>): Promise<void> {
-    const stepNumber = event.stepNumber ?? 0;
-    const generationId = this.generationIds.get(stepNumber);
-
-    this.events.push({
-      id: crypto.randomUUID(),
-      type: "generation-update",
-      timestamp: new Date().toISOString(),
-      body: {
-        id: generationId,
-        traceId: this.traceId,
-        output: event.text,
-        endTime: new Date().toISOString(),
-        usage: {
-          input: event.usage?.inputTokens,
-          output: event.usage?.outputTokens,
-        },
-      },
-    });
-  }
-
-  async onFinish(_event: OnFinishEvent<ToolSet>): Promise<void> {
+  async flush(): Promise<void> {
     if (this.events.length === 0) {
       return;
     }
@@ -172,5 +130,153 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     } catch {
       // Silently handle fetch failures
     }
+
+    this.events = [];
+  }
+
+  async onStart(event: OnStartEvent<ToolSet>): Promise<void> {
+    if (!this.traceId) {
+      this.traceId = crypto.randomUUID();
+      this.events.push({
+        id: crypto.randomUUID(),
+        type: "trace-create",
+        timestamp: new Date().toISOString(),
+        body: {
+          id: this.traceId,
+          name: "ai-generate-text",
+          input: event.prompt,
+          environment: this.environment,
+          metadata: {
+            model: event.model?.modelId,
+            provider: event.model?.provider,
+          },
+        },
+      });
+    }
+
+    this.agentId = crypto.randomUUID();
+    this.events.push({
+      id: crypto.randomUUID(),
+      type: "agent-create",
+      timestamp: new Date().toISOString(),
+      body: {
+        id: this.agentId,
+        traceId: this.traceId,
+        name: "ask-llm",
+        startTime: new Date().toISOString(),
+      },
+    });
+  }
+
+  async onStepStart(event: OnStepStartEvent<ToolSet>): Promise<void> {
+    const generationId = crypto.randomUUID();
+    const stepNumber = event.stepNumber ?? 0;
+    this.generationIds.set(stepNumber, generationId);
+
+    this.events.push({
+      id: crypto.randomUUID(),
+      type: "generation-create",
+      timestamp: new Date().toISOString(),
+      body: {
+        id: generationId,
+        traceId: this.traceId,
+        parentObservationId: this.agentId,
+        name: `step-${stepNumber}`,
+        model: event.model?.modelId,
+        startTime: new Date().toISOString(),
+        input: {
+          system: (event as any).system,
+          messages: (event as any).messages,
+        },
+      },
+    });
+  }
+
+  async onToolCallStart(event: OnToolCallStartEvent<ToolSet>): Promise<void> {
+    const stepNumber = event.stepNumber ?? 0;
+    const toolName = event.toolCall?.toolName ?? "unknown";
+    const toolCallId = crypto.randomUUID();
+
+    this.pendingToolCalls.set(`${stepNumber}:${toolName}`, {
+      id: toolCallId,
+      startTime: new Date().toISOString(),
+      input: event.toolCall?.input,
+    });
+  }
+
+  async onToolCallFinish(event: OnToolCallFinishEvent<ToolSet>): Promise<void> {
+    const stepNumber = event.stepNumber ?? 0;
+    const toolName = event.toolCall?.toolName ?? "unknown";
+    const key = `${stepNumber}:${toolName}`;
+    const pending = this.pendingToolCalls.get(key);
+    const parentGenerationId = this.generationIds.get(stepNumber);
+
+    this.events.push({
+      id: crypto.randomUUID(),
+      type: "tool-create",
+      timestamp: new Date().toISOString(),
+      body: {
+        id: pending?.id ?? crypto.randomUUID(),
+        traceId: this.traceId,
+        parentObservationId: parentGenerationId,
+        name: toolName,
+        input: pending?.input,
+        output: event.success ? event.output : { error: event.error },
+        startTime: pending?.startTime,
+        endTime: new Date().toISOString(),
+        metadata: {
+          durationMs: event.durationMs,
+          success: event.success,
+        },
+      },
+    });
+
+    this.pendingToolCalls.delete(key);
+  }
+
+  async onStepFinish(event: OnStepFinishEvent<ToolSet>): Promise<void> {
+    const stepNumber = event.stepNumber ?? 0;
+    const generationId = this.generationIds.get(stepNumber);
+
+    const output: Record<string, unknown> = { text: event.text };
+    if ((event as any).reasoning) {
+      output.reasoning = (event as any).reasoning;
+    }
+
+    this.events.push({
+      id: crypto.randomUUID(),
+      type: "generation-update",
+      timestamp: new Date().toISOString(),
+      body: {
+        id: generationId,
+        traceId: this.traceId,
+        output,
+        endTime: new Date().toISOString(),
+        usage: {
+          input: event.usage?.inputTokens,
+          output: event.usage?.outputTokens,
+          total: (event.usage as any)?.totalTokens,
+          unit: "TOKENS",
+        },
+      },
+    });
+  }
+
+  async onFinish(_event: OnFinishEvent<ToolSet>): Promise<void> {
+    if (this.agentId) {
+      this.events.push({
+        id: crypto.randomUUID(),
+        type: "span-update",
+        timestamp: new Date().toISOString(),
+        body: {
+          id: this.agentId,
+          traceId: this.traceId,
+          endTime: new Date().toISOString(),
+          output: _event.text,
+        },
+      });
+    }
+
+    await this.flush();
   }
 }
