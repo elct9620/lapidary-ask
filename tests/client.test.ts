@@ -69,6 +69,10 @@ describe("askLLM", () => {
         system: buildSystemPrompt("zh-TW"),
         prompt: "test question",
         stopWhen: "stepCountIs(15)",
+        tools: expect.objectContaining({
+          searchNodes: expect.anything(),
+          getNeighbors: expect.anything(),
+        }),
       }),
     );
   });
