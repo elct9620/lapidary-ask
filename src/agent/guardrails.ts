@@ -4,6 +4,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { getLanguageName } from "./prompt";
 import type { Flushable } from "../telemetry/langfuse";
+import { buildTelemetryConfig, flushIntegrations } from "./telemetry-helpers";
 
 export interface CheckGuardrailsOptions {
   question: string;
@@ -66,16 +67,12 @@ export async function checkGuardrails(
       output: Output.object({ schema: guardrailsSchema }),
       system: buildGuardrailsSystemPrompt(locale),
       prompt: question,
-      ...(integrations && {
-        experimental_telemetry: { isEnabled: true, integrations },
-      }),
+      ...buildTelemetryConfig(integrations),
     });
 
     return output ?? FAIL_OPEN;
   } catch {
-    if (options.integrations) {
-      await Promise.allSettled(options.integrations.map((i) => i.flush()));
-    }
+    await flushIntegrations(options.integrations);
     return FAIL_OPEN;
   }
 }

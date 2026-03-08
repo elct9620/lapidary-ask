@@ -3,6 +3,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt } from "./prompt";
 import { createTools } from "./tools";
 import type { Flushable } from "../telemetry/langfuse";
+import { buildTelemetryConfig, flushIntegrations } from "./telemetry-helpers";
 
 export interface AskLLMOptions {
   question: string;
@@ -31,15 +32,11 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
       prompt: question,
       tools,
       stopWhen: stepCountIs(15),
-      ...(integrations && {
-        experimental_telemetry: { isEnabled: true, integrations },
-      }),
+      ...buildTelemetryConfig(integrations),
     });
     return text || "No response.";
   } catch (error) {
-    if (integrations) {
-      await Promise.allSettled(integrations.map((i) => i.flush()));
-    }
+    await flushIntegrations(integrations);
     throw error;
   }
 }

@@ -262,7 +262,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         usage: {
           input: event.usage?.inputTokens,
           output: event.usage?.outputTokens,
-          total: event.usage.totalTokens,
+          total: event.usage?.totalTokens,
           unit: "TOKENS",
         },
       },
