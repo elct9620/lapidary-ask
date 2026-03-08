@@ -23,7 +23,7 @@ export interface DiscordInteraction {
 
 export async function handleDiscordWebhook(
   request: Request,
-  ctx: ExecutionContext,
+  ctx: Pick<ExecutionContext, "waitUntil">,
   env: Env,
 ): Promise<Response> {
   const bodyBuffer = await request.arrayBuffer();

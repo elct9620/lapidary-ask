@@ -1,4 +1,4 @@
-import { tool, type ToolSet } from "ai";
+import { tool } from "ai";
 import { z } from "zod";
 
 export function normalizeNodeId(nodeId: string): string {
@@ -42,7 +42,7 @@ async function fetchFromGraph(fetcher: Fetcher, url: string): Promise<unknown> {
   }
 }
 
-export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
+export function createTools(fetcher: Fetcher, baseUrl: string) {
   return {
     searchNodes: tool({
       description:

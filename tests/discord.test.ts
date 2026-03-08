@@ -7,14 +7,14 @@ let TEST_PUBLIC_KEY_HEX: string;
 let signingKey: CryptoKey;
 
 async function generateEd25519KeyPair() {
-  const keyPair = await crypto.subtle.generateKey("Ed25519", true, [
+  const keyPair = (await crypto.subtle.generateKey("Ed25519", true, [
     "sign",
     "verify",
-  ]);
-  const publicKeyBuffer = await crypto.subtle.exportKey(
+  ])) as CryptoKeyPair;
+  const publicKeyBuffer = (await crypto.subtle.exportKey(
     "raw",
     keyPair.publicKey,
-  );
+  )) as ArrayBuffer;
   const publicKeyHex = Array.from(new Uint8Array(publicKeyBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

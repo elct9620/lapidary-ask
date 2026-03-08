@@ -58,7 +58,7 @@ describe("getNeighbors tool", () => {
     const fetcher = { fetch: mockFetch } as unknown as Fetcher;
     const tools = createTools(fetcher, "http://api.test");
 
-    await tools.getNeighbors.execute(
+    await tools.getNeighbors.execute!(
       { nodeId: "stdlib//irb" },
       { toolCallId: "test", messages: [], abortSignal: undefined as never },
     );
@@ -78,7 +78,7 @@ describe("searchNodes tool", () => {
     const fetcher = { fetch: mockFetch } as unknown as Fetcher;
     const tools = createTools(fetcher, "http://api.test");
 
-    await tools.searchNodes.execute(
+    await tools.searchNodes.execute!(
       { type: "stdlib" as "Stdlib", query: "irb" },
       { toolCallId: "test", messages: [], abortSignal: undefined as never },
     );
@@ -96,7 +96,7 @@ describe("searchNodes tool", () => {
     const fetcher = { fetch: mockFetch } as unknown as Fetcher;
     const tools = createTools(fetcher, "http://api.test");
 
-    const result = await tools.searchNodes.execute(
+    const result = await tools.searchNodes.execute!(
       { type: "Rubyist", query: "unknown" },
       { toolCallId: "test", messages: [], abortSignal: undefined as never },
     );
@@ -112,7 +112,7 @@ describe("searchNodes tool", () => {
     const fetcher = { fetch: mockFetch } as unknown as Fetcher;
     const tools = createTools(fetcher, "http://api.test");
 
-    const result = await tools.searchNodes.execute(
+    const result = await tools.searchNodes.execute!(
       { type: "Rubyist", query: "matz" },
       { toolCallId: "test", messages: [], abortSignal: undefined as never },
     );
