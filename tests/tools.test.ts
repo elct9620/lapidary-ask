@@ -6,7 +6,7 @@ import {
 } from "../src/agent/tools";
 
 describe("normalizeNodeId", () => {
-  it('fixes missing colon: "stdlib//irb" → "stdlib://irb"', () => {
+  it('fixes missing colon: "stdlib//irb" -> "stdlib://irb"', () => {
     expect(normalizeNodeId("stdlib//irb")).toBe("stdlib://irb");
   });
 
