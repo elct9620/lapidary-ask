@@ -10,6 +10,7 @@ export interface DiscordInteraction {
   type: number;
   id: string;
   token: string;
+  locale?: string;
   data?: {
     name: string;
     options?: Array<{
@@ -92,6 +93,7 @@ async function handleAskCommand(
   const interactionId = interaction.id;
   const interactionToken = interaction.token;
   const applicationId = env.DISCORD_APPLICATION_ID;
+  const locale = interaction.locale ?? "zh-TW";
 
   if (!question) {
     await patchDiscordResponse(applicationId, interactionToken, {
@@ -106,6 +108,7 @@ async function handleAskCommand(
       question,
       interactionToken,
       applicationId,
+      locale,
     },
   });
 }

@@ -1,4 +1,23 @@
-export const SYSTEM_PROMPT = `You are the Lapidary Knowledge Graph assistant, specialized in answering questions about relationships between Rubyists and Ruby core modules (CoreModule) or standard libraries (Stdlib).
+const LOCALE_LANGUAGE_MAP: Record<string, string> = {
+  "zh-TW": "Traditional Chinese (Taiwan)",
+  "zh-CN": "Simplified Chinese",
+  ja: "Japanese",
+};
+
+function getLanguageName(locale: string): string {
+  if (locale in LOCALE_LANGUAGE_MAP) {
+    return LOCALE_LANGUAGE_MAP[locale]!;
+  }
+  if (locale.startsWith("en")) {
+    return "English";
+  }
+  return "Traditional Chinese (Taiwan)";
+}
+
+export function buildSystemPrompt(locale: string): string {
+  const language = getLanguageName(locale);
+
+  return `You are the Lapidary Knowledge Graph assistant, specialized in answering questions about relationships between Rubyists and Ruby core modules (CoreModule) or standard libraries (Stdlib).
 
 ## Data Source
 
@@ -53,8 +72,5 @@ Always follow this workflow to answer questions:
 
 ## Response Language
 
-Respond in the same language the user uses. When the language is ambiguous, prefer the following priority:
-
-1. Traditional Chinese (Taiwan)
-2. Japanese
-3. English`;
+Always respond in **${language}**.`;
+}

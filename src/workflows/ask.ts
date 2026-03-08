@@ -11,6 +11,7 @@ export interface AskWorkflowParams {
   question: string;
   interactionToken: string;
   applicationId: string;
+  locale: string;
 }
 
 async function reportError(
@@ -36,7 +37,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     event: WorkflowEvent<AskWorkflowParams>,
     step: WorkflowStep,
   ) {
-    const { question, interactionToken, applicationId } = event.payload;
+    const { question, interactionToken, applicationId, locale } = event.payload;
 
     let answer: string;
     try {
@@ -49,6 +50,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
             this.env.OPENROUTER_API_KEY,
             this.env.INTERNAL_API,
             this.env.INTERNAL_API_URL,
+            locale,
           );
         },
       );

@@ -155,6 +155,7 @@ describe("handleDiscordWebhook", () => {
         question: "What is Ruby?",
         interactionToken: "test-token",
         applicationId: TEST_APP_ID,
+        locale: "zh-TW",
       },
     });
   });

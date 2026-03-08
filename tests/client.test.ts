@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { SYSTEM_PROMPT } from "../src/agent/prompt";
+import { buildSystemPrompt } from "../src/agent/prompt";
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
@@ -61,9 +61,29 @@ describe("askLLM", () => {
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: SYSTEM_PROMPT,
+        system: buildSystemPrompt("zh-TW"),
         prompt: "test question",
         stopWhen: "stepCountIs(15)",
+      }),
+    );
+  });
+
+  it("passes locale to buildSystemPrompt", async () => {
+    mockedGenerateText.mockResolvedValue({
+      text: "response",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await askLLM(
+      "test question",
+      "test-key",
+      mockFetcher,
+      "http://api.test",
+      "ja",
+    );
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: buildSystemPrompt("ja"),
       }),
     );
   });
