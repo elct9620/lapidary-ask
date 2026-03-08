@@ -20,6 +20,7 @@ export interface LangfuseConfig {
   environment?: string;
   traceId?: string;
   agentName?: string;
+  parentObservationId?: string;
 }
 
 interface LangfuseEvent {
@@ -36,6 +37,7 @@ interface PendingToolCall {
 }
 
 export interface RecordGuardrailOptions {
+  id?: string;
   name: string;
   input: unknown;
   output: unknown;
@@ -50,6 +52,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
   private readonly baseUrl: string;
   private readonly environment: string | undefined;
   private readonly agentName: string;
+  private readonly parentObservationId: string | null;
   private events: LangfuseEvent[] = [];
   private traceId: string | null = null;
   private agentId: string | null = null;
@@ -62,6 +65,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     this.baseUrl = config.baseUrl ?? "https://cloud.langfuse.com";
     this.environment = config.environment;
     this.agentName = config.agentName ?? "ask-llm";
+    this.parentObservationId = config.parentObservationId ?? null;
     if (config.traceId) {
       this.traceId = config.traceId;
     }
@@ -92,13 +96,14 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     return this.traceId;
   }
 
-  recordGuardrail(options: RecordGuardrailOptions): void {
+  recordGuardrail(options: RecordGuardrailOptions): string {
+    const guardrailId = options.id ?? crypto.randomUUID();
     this.events.push({
       id: crypto.randomUUID(),
       type: "guardrail-create",
       timestamp: new Date().toISOString(),
       body: {
-        id: crypto.randomUUID(),
+        id: guardrailId,
         traceId: this.traceId,
         name: options.name,
         input: options.input,
@@ -108,6 +113,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         ...(options.metadata && { metadata: options.metadata }),
       },
     });
+    return guardrailId;
   }
 
   async flush(): Promise<void> {
@@ -154,18 +160,20 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       });
     }
 
-    this.agentId = crypto.randomUUID();
-    this.events.push({
-      id: crypto.randomUUID(),
-      type: "agent-create",
-      timestamp: new Date().toISOString(),
-      body: {
-        id: this.agentId,
-        traceId: this.traceId,
-        name: this.agentName,
-        startTime: new Date().toISOString(),
-      },
-    });
+    if (!this.parentObservationId) {
+      this.agentId = crypto.randomUUID();
+      this.events.push({
+        id: crypto.randomUUID(),
+        type: "agent-create",
+        timestamp: new Date().toISOString(),
+        body: {
+          id: this.agentId,
+          traceId: this.traceId,
+          name: this.agentName,
+          startTime: new Date().toISOString(),
+        },
+      });
+    }
   };
 
   onStepStart = async (event: OnStepStartEvent<ToolSet>): Promise<void> => {
@@ -180,7 +188,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       body: {
         id: generationId,
         traceId: this.traceId,
-        parentObservationId: this.agentId,
+        parentObservationId: this.parentObservationId ?? this.agentId,
         name: `step-${stepNumber}`,
         model: event.model?.modelId,
         startTime: new Date().toISOString(),

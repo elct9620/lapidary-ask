@@ -483,6 +483,71 @@ describe("LangfuseTelemetryIntegration", () => {
     expect(agentCreate.body.name).toBe("ask-llm");
   });
 
+  it("parentObservationId skips agent-create and uses it as generation parent", async () => {
+    const parentIntegration = new LangfuseTelemetryIntegration({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+      traceId: "existing-trace",
+      parentObservationId: "guardrail-obs-id",
+    });
+
+    await runLifecycle(parentIntegration);
+
+    const batch = parseBatch();
+    const types = batch.map((e: any) => e.type);
+
+    // No agent-create or span-update (agent end)
+    expect(types).not.toContain("agent-create");
+    expect(types).not.toContain("span-update");
+
+    // Generation should use parentObservationId
+    const generationCreate = batch.find(
+      (e: any) => e.type === "generation-create",
+    );
+    expect(generationCreate.body.parentObservationId).toBe("guardrail-obs-id");
+    expect(generationCreate.body.traceId).toBe("existing-trace");
+  });
+
+  it("recordGuardrail returns generated ID when no id provided", async () => {
+    integration.createTrace({
+      name: "test",
+      input: "test",
+    });
+
+    const id = integration.recordGuardrail({
+      name: "check-guardrails",
+      input: "test",
+      output: { relevant: true },
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+    });
+
+    expect(id).toMatch(/^uuid-/);
+  });
+
+  it("recordGuardrail uses pre-specified id", async () => {
+    integration.createTrace({
+      name: "test",
+      input: "test",
+    });
+
+    const id = integration.recordGuardrail({
+      id: "my-guardrail-id",
+      name: "check-guardrails",
+      input: "test",
+      output: { relevant: true },
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+    });
+
+    expect(id).toBe("my-guardrail-id");
+
+    await integration.flush();
+
+    const guardrailEvent = findEvent("guardrail-create");
+    expect(guardrailEvent.body.id).toBe("my-guardrail-id");
+  });
+
   it("generation-update omits metadata when no providerMetadata", async () => {
     await runLifecycle(integration, {
       stepFinish: {

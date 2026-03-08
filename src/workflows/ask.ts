@@ -10,7 +10,11 @@ import { LangfuseTelemetryIntegration } from "../telemetry/langfuse";
 
 function createTelemetryIntegration(
   env: Env,
-  options?: { traceId?: string; agentName?: string },
+  options?: {
+    traceId?: string;
+    agentName?: string;
+    parentObservationId?: string;
+  },
 ): LangfuseTelemetryIntegration | undefined {
   if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) {
     return undefined;
@@ -23,6 +27,7 @@ function createTelemetryIntegration(
     environment: env.ENVIRONMENT,
     traceId: options?.traceId,
     agentName: options?.agentName,
+    parentObservationId: options?.parentObservationId,
   });
 }
 
@@ -44,10 +49,9 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       "check-guardrails",
       { retries: { limit: 0, delay: "1 second" } },
       async () => {
-        const integration = createTelemetryIntegration(this.env, {
-          agentName: "check-guardrails",
-        });
+        const integration = createTelemetryIntegration(this.env);
         let traceId: string | undefined;
+        const guardrailId = crypto.randomUUID();
 
         if (integration) {
           traceId = integration.createTrace({
@@ -56,17 +60,26 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
           });
         }
 
+        const guardrailIntegration = createTelemetryIntegration(this.env, {
+          traceId,
+          agentName: "check-guardrails",
+          parentObservationId: guardrailId,
+        });
+
         const startTime = new Date().toISOString();
         const result = await checkGuardrails({
           question,
           apiKey: this.env.OPENROUTER_API_KEY,
           locale,
-          integrations: integration ? [integration] : undefined,
+          integrations: guardrailIntegration
+            ? [guardrailIntegration]
+            : undefined,
         });
         const endTime = new Date().toISOString();
 
         if (integration) {
           integration.recordGuardrail({
+            id: guardrailId,
             name: "check-guardrails",
             input: question,
             output: result,
