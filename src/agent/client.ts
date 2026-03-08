@@ -3,13 +3,22 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt } from "./prompt";
 import { createTools } from "./tools";
 
-export async function askLLM(
-  question: string,
-  apiKey: string,
-  internalApi: Fetcher,
-  internalApiUrl: string,
-  locale: string = "zh-TW",
-): Promise<string> {
+export interface AskLLMOptions {
+  question: string;
+  apiKey: string;
+  internalApi: Fetcher;
+  internalApiUrl: string;
+  locale?: string;
+}
+
+export async function askLLM(options: AskLLMOptions): Promise<string> {
+  const {
+    question,
+    apiKey,
+    internalApi,
+    internalApiUrl,
+    locale = "zh-TW",
+  } = options;
   const openrouter = createOpenRouter({ apiKey });
   const tools = createTools(internalApi, internalApiUrl);
   const { text } = await generateText({

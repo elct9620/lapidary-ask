@@ -1,25 +1,12 @@
 import {
   InteractionType,
   InteractionResponseType,
+  type APIInteraction,
+  type APIChatInputApplicationCommandInteraction,
 } from "discord-api-types/v10";
 import { verifyKey } from "discord-interactions";
 import { patchDiscordResponse } from "./discord/api";
 import { getStringOption } from "./discord/helpers";
-
-export interface DiscordInteraction {
-  type: number;
-  id: string;
-  token: string;
-  locale?: string;
-  data?: {
-    name: string;
-    options?: Array<{
-      name: string;
-      type: number;
-      value?: string | number | boolean;
-    }>;
-  };
-}
 
 export async function handleDiscordWebhook(
   request: Request,
@@ -53,9 +40,9 @@ export async function handleDiscordWebhook(
     return new Response("Invalid signature", { status: 401 });
   }
 
-  let interaction: DiscordInteraction;
+  let interaction: APIInteraction;
   try {
-    interaction = JSON.parse(body) as DiscordInteraction;
+    interaction = JSON.parse(body) as APIInteraction;
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }
@@ -65,7 +52,12 @@ export async function handleDiscordWebhook(
   }
 
   if (interaction.type === InteractionType.ApplicationCommand) {
-    ctx.waitUntil(handleApplicationCommand(interaction, env));
+    ctx.waitUntil(
+      handleApplicationCommand(
+        interaction as APIChatInputApplicationCommandInteraction,
+        env,
+      ),
+    );
     return Response.json({
       type: InteractionResponseType.DeferredChannelMessageWithSource,
     });
@@ -75,7 +67,7 @@ export async function handleDiscordWebhook(
 }
 
 async function handleApplicationCommand(
-  interaction: DiscordInteraction,
+  interaction: APIChatInputApplicationCommandInteraction,
   env: Env,
 ): Promise<void> {
   const commandName = interaction.data?.name;
@@ -86,7 +78,7 @@ async function handleApplicationCommand(
 }
 
 async function handleAskCommand(
-  interaction: DiscordInteraction,
+  interaction: APIChatInputApplicationCommandInteraction,
   env: Env,
 ): Promise<void> {
   const question = getStringOption(interaction, "question");

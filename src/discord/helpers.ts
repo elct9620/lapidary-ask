@@ -1,8 +1,10 @@
-import { ApplicationCommandOptionType } from "discord-api-types/v10";
-import type { DiscordInteraction } from "../discord";
+import {
+  ApplicationCommandOptionType,
+  type APIChatInputApplicationCommandInteraction,
+} from "discord-api-types/v10";
 
 export function getStringOption(
-  interaction: DiscordInteraction,
+  interaction: APIChatInputApplicationCommandInteraction,
   name: string,
 ): string | undefined {
   const option = interaction.data?.options?.find((o) => o.name === name);

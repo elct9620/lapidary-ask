@@ -27,12 +27,12 @@ describe("askLLM", () => {
       text: "Hello from LLM",
     } as Awaited<ReturnType<typeof generateText>>);
 
-    const result = await askLLM(
-      "What is Ruby?",
-      "test-key",
-      mockFetcher,
-      "http://api.test",
-    );
+    const result = await askLLM({
+      question: "What is Ruby?",
+      apiKey: "test-key",
+      internalApi: mockFetcher,
+      internalApiUrl: "http://api.test",
+    });
 
     expect(result).toBe("Hello from LLM");
   });
@@ -42,12 +42,12 @@ describe("askLLM", () => {
       text: "",
     } as Awaited<ReturnType<typeof generateText>>);
 
-    const result = await askLLM(
-      "What is Ruby?",
-      "test-key",
-      mockFetcher,
-      "http://api.test",
-    );
+    const result = await askLLM({
+      question: "What is Ruby?",
+      apiKey: "test-key",
+      internalApi: mockFetcher,
+      internalApiUrl: "http://api.test",
+    });
 
     expect(result).toBe("No response.");
   });
@@ -57,7 +57,12 @@ describe("askLLM", () => {
       text: "response",
     } as Awaited<ReturnType<typeof generateText>>);
 
-    await askLLM("test question", "test-key", mockFetcher, "http://api.test");
+    await askLLM({
+      question: "test question",
+      apiKey: "test-key",
+      internalApi: mockFetcher,
+      internalApiUrl: "http://api.test",
+    });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -73,13 +78,13 @@ describe("askLLM", () => {
       text: "response",
     } as Awaited<ReturnType<typeof generateText>>);
 
-    await askLLM(
-      "test question",
-      "test-key",
-      mockFetcher,
-      "http://api.test",
-      "ja",
-    );
+    await askLLM({
+      question: "test question",
+      apiKey: "test-key",
+      internalApi: mockFetcher,
+      internalApiUrl: "http://api.test",
+      locale: "ja",
+    });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({

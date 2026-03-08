@@ -27,13 +27,13 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "ask-llm",
         { retries: { limit: 1, delay: "5 seconds" } },
         async () => {
-          return await askLLM(
+          return await askLLM({
             question,
-            this.env.OPENROUTER_API_KEY,
-            this.env.INTERNAL_API,
-            this.env.INTERNAL_API_URL,
+            apiKey: this.env.OPENROUTER_API_KEY,
+            internalApi: this.env.INTERNAL_API,
+            internalApiUrl: this.env.INTERNAL_API_URL,
             locale,
-          );
+          });
         },
       );
     } catch (error) {
