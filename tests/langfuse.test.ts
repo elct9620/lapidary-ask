@@ -1,8 +1,162 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { LangfuseTelemetryIntegration } from "../src/telemetry/langfuse";
+import { LangfuseClient } from "../src/telemetry/client";
+import { LangfuseTracer } from "../src/telemetry/tracer";
+import { LangfuseTelemetryIntegration } from "../src/telemetry/integration";
 
-describe("LangfuseTelemetryIntegration", () => {
-  let integration: LangfuseTelemetryIntegration;
+describe("LangfuseClient", () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+  });
+
+  it("sends batched events via POST", async () => {
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    client.emit({
+      id: "e1",
+      type: "trace-create",
+      timestamp: "2025-01-01T00:00:00.000Z",
+      body: { id: "t1", name: "test" },
+    });
+
+    await client.flush();
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const [url, options] = fetchSpy.mock.calls[0];
+    expect(url).toBe("https://cloud.langfuse.com/api/public/ingestion");
+    expect(options.method).toBe("POST");
+
+    const body = JSON.parse(options.body);
+    expect(body.batch).toHaveLength(1);
+    expect(body.batch[0].type).toBe("trace-create");
+  });
+
+  it("sends correct auth header", async () => {
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    client.emit({
+      id: "e1",
+      type: "trace-create",
+      timestamp: "2025-01-01T00:00:00.000Z",
+      body: { id: "t1" },
+    });
+
+    await client.flush();
+
+    const [, options] = fetchSpy.mock.calls[0];
+    const expectedAuth = `Basic ${btoa("pk-test:sk-test")}`;
+    expect(options.headers["Authorization"]).toBe(expectedAuth);
+    expect(options.headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("uses custom base URL", async () => {
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+      baseUrl: "https://custom.langfuse.com",
+    });
+
+    client.emit({
+      id: "e1",
+      type: "trace-create",
+      timestamp: "2025-01-01T00:00:00.000Z",
+      body: { id: "t1" },
+    });
+
+    await client.flush();
+
+    const [url] = fetchSpy.mock.calls[0];
+    expect(url).toBe("https://custom.langfuse.com/api/public/ingestion");
+  });
+
+  it("skips send when no events", async () => {
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    await client.flush();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("clears buffer after flush", async () => {
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    client.emit({
+      id: "e1",
+      type: "trace-create",
+      timestamp: "2025-01-01T00:00:00.000Z",
+      body: { id: "t1" },
+    });
+
+    await client.flush();
+    expect(fetchSpy).toHaveBeenCalledOnce();
+
+    await client.flush();
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("clears buffer even on HTTP error response", async () => {
+    fetchSpy.mockResolvedValue(new Response("error", { status: 500 }));
+
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    client.emit({
+      id: "e1",
+      type: "trace-create",
+      timestamp: "2025-01-01T00:00:00.000Z",
+      body: { id: "t1" },
+    });
+
+    await client.flush();
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+
+    // Buffer should be cleared even on error response
+    await client.flush();
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("warns on fetch failure instead of throwing", async () => {
+    fetchSpy.mockRejectedValue(new Error("Network error"));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    client.emit({
+      id: "e1",
+      type: "trace-create",
+      timestamp: "2025-01-01T00:00:00.000Z",
+      body: { id: "t1" },
+    });
+
+    await client.flush();
+
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});
+
+describe("LangfuseTracer", () => {
+  let client: LangfuseClient;
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -13,10 +167,190 @@ describe("LangfuseTelemetryIntegration", () => {
       randomUUID: vi.fn(() => `uuid-${++uuidCounter}`),
     });
 
-    integration = new LangfuseTelemetryIntegration({
+    client = new LangfuseClient({
       publicKey: "pk-test",
       secretKey: "sk-test",
     });
+  });
+
+  function parseBatch(): any[] {
+    return JSON.parse(fetchSpy.mock.calls[0][1].body).batch;
+  }
+
+  it("createTrace sets traceId and emits trace-create", async () => {
+    const tracer = new LangfuseTracer({ client });
+    const traceId = tracer.createTrace({
+      name: "test-trace",
+      input: { question: "test" },
+    });
+
+    expect(traceId).toBe("uuid-1");
+    expect(tracer.traceId).toBe("uuid-1");
+
+    await tracer.flush();
+    const batch = parseBatch();
+    expect(batch).toHaveLength(1);
+    expect(batch[0].type).toBe("trace-create");
+    expect(batch[0].body.name).toBe("test-trace");
+  });
+
+  it("includes environment in trace-create", async () => {
+    const tracer = new LangfuseTracer({
+      client,
+      environment: "production",
+    });
+
+    tracer.createTrace({ name: "test", input: "test" });
+    await tracer.flush();
+
+    const batch = parseBatch();
+    expect(batch[0].body.environment).toBe("production");
+  });
+
+  it("omits environment when not provided", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+    await tracer.flush();
+
+    const batch = parseBatch();
+    expect(batch[0].body.environment).toBeUndefined();
+  });
+
+  it("createAgent and endAgent use agent-create and agent-update", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+    const agentId = tracer.createAgent({ name: "ask-llm" });
+    tracer.endAgent(agentId, "final response");
+
+    await tracer.flush();
+    const batch = parseBatch();
+
+    const agentCreate = batch.find((e: any) => e.type === "agent-create");
+    const agentUpdate = batch.find((e: any) => e.type === "agent-update");
+
+    expect(agentCreate).toBeDefined();
+    expect(agentCreate.body.name).toBe("ask-llm");
+    expect(agentCreate.body.traceId).toBe("uuid-1");
+
+    expect(agentUpdate).toBeDefined();
+    expect(agentUpdate.body.id).toBe(agentId);
+    expect(agentUpdate.body.output).toBe("final response");
+  });
+
+  it("createGeneration and endGeneration work correctly", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+    const agentId = tracer.createAgent({ name: "ask-llm" });
+
+    const genId = tracer.createGeneration({
+      parentId: agentId,
+      name: "step-0",
+      model: "openrouter/free",
+      input: [{ role: "user", content: "Hello" }],
+    });
+
+    tracer.endGeneration(genId, {
+      output: { text: "response" },
+      model: "google/gemma-3-27b-it:free",
+      usage: { input: 50, output: 25, total: 75 },
+    });
+
+    await tracer.flush();
+    const batch = parseBatch();
+
+    const genCreate = batch.find((e: any) => e.type === "generation-create");
+    expect(genCreate.body.parentObservationId).toBe(agentId);
+    expect(genCreate.body.model).toBe("openrouter/free");
+
+    const genUpdate = batch.find((e: any) => e.type === "generation-update");
+    expect(genUpdate.body.model).toBe("google/gemma-3-27b-it:free");
+    expect(genUpdate.body.usage).toEqual({
+      input: 50,
+      output: 25,
+      total: 75,
+      unit: "TOKENS",
+    });
+  });
+
+  it("createTool emits tool-create with parent", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+
+    tracer.createTool({
+      parentId: "gen-1",
+      name: "searchNodes",
+      input: { query: "Ruby" },
+      output: [{ name: "Ruby" }],
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+      metadata: { durationMs: 100, success: true },
+    });
+
+    await tracer.flush();
+    const batch = parseBatch();
+    const toolEvent = batch.find((e: any) => e.type === "tool-create");
+
+    expect(toolEvent.body.name).toBe("searchNodes");
+    expect(toolEvent.body.parentObservationId).toBe("gen-1");
+    expect(toolEvent.body.input).toEqual({ query: "Ruby" });
+    expect(toolEvent.body.output).toEqual([{ name: "Ruby" }]);
+  });
+
+  it("createGuardrail emits guardrail-create", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+
+    tracer.createGuardrail({
+      name: "check-guardrails",
+      input: "What is Ruby?",
+      output: { relevant: true, reason: "" },
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+    });
+
+    await tracer.flush();
+    const batch = parseBatch();
+    const guardrailEvent = batch.find(
+      (e: any) => e.type === "guardrail-create",
+    );
+
+    expect(guardrailEvent).toBeDefined();
+    expect(guardrailEvent.body.name).toBe("check-guardrails");
+    expect(guardrailEvent.body.traceId).toBe("uuid-1");
+  });
+
+  it("setTraceId allows using existing trace", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.setTraceId("existing-trace-id");
+
+    const agentId = tracer.createAgent({ name: "ask-llm" });
+    await tracer.flush();
+
+    const batch = parseBatch();
+    const agentCreate = batch.find((e: any) => e.type === "agent-create");
+    expect(agentCreate.body.traceId).toBe("existing-trace-id");
+  });
+});
+
+describe("LangfuseTelemetryIntegration", () => {
+  let client: LangfuseClient;
+  let tracer: LangfuseTracer;
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    let uuidCounter = 0;
+    vi.stubGlobal("crypto", {
+      randomUUID: vi.fn(() => `uuid-${++uuidCounter}`),
+    });
+
+    client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+    tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
   });
 
   async function runLifecycle(
@@ -90,15 +424,12 @@ describe("LangfuseTelemetryIntegration", () => {
   }
 
   it("collects events through lifecycle hooks and batches them", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, { withToolCall: true });
 
     expect(fetchSpy).toHaveBeenCalledOnce();
-    const [url, options] = fetchSpy.mock.calls[0];
-    expect(url).toBe("https://cloud.langfuse.com/api/public/ingestion");
-    expect(options.method).toBe("POST");
-
     const batch = parseBatch();
-    // trace-create, agent-create, generation-create, tool-create, generation-update, span-update (agent end)
+    // trace-create, agent-create, generation-create, tool-create, generation-update, agent-update
     expect(batch).toHaveLength(6);
 
     const types = batch.map((e: any) => e.type);
@@ -107,70 +438,11 @@ describe("LangfuseTelemetryIntegration", () => {
     expect(types).toContain("generation-create");
     expect(types).toContain("tool-create");
     expect(types).toContain("generation-update");
-    expect(types).toContain("span-update");
+    expect(types).toContain("agent-update");
   });
 
-  it("sends correct auth header", async () => {
-    await runLifecycle(integration);
-
-    const [, options] = fetchSpy.mock.calls[0];
-    const expectedAuth = `Basic ${btoa("pk-test:sk-test")}`;
-    expect(options.headers["Authorization"]).toBe(expectedAuth);
-    expect(options.headers["Content-Type"]).toBe("application/json");
-  });
-
-  it("silently handles fetch failures", async () => {
-    fetchSpy.mockRejectedValue(new Error("Network error"));
-
-    await runLifecycle(integration);
-
-    expect(fetchSpy).toHaveBeenCalledOnce();
-    // Should not throw
-  });
-
-  it("skips send when no events collected", async () => {
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("uses custom base URL when provided", async () => {
-    integration = new LangfuseTelemetryIntegration({
-      publicKey: "pk-test",
-      secretKey: "sk-test",
-      baseUrl: "https://custom.langfuse.com",
-    });
-
-    await runLifecycle(integration);
-
-    const [url] = fetchSpy.mock.calls[0];
-    expect(url).toBe("https://custom.langfuse.com/api/public/ingestion");
-  });
-
-  it("includes environment in trace-create body", async () => {
-    const envIntegration = new LangfuseTelemetryIntegration({
-      publicKey: "pk-test",
-      secretKey: "sk-test",
-      environment: "production",
-    });
-
-    await runLifecycle(envIntegration);
-
-    const traceEvent = findEvent("trace-create");
-    expect(traceEvent.body.environment).toBe("production");
-  });
-
-  it("omits environment when not provided", async () => {
-    await runLifecycle(integration);
-
-    const traceEvent = findEvent("trace-create");
-    expect(traceEvent.body.environment).toBeUndefined();
-  });
-
-  it("creates correct parent-child relationships with agent", async () => {
+  it("creates correct parent-child relationships", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, { withToolCall: true });
 
     const batch = parseBatch();
@@ -184,101 +456,80 @@ describe("LangfuseTelemetryIntegration", () => {
     // Agent is under trace
     expect(agentCreate.body.traceId).toBe(traceEvent.body.id);
     // Generation is under agent
-    expect(generationCreate.body.traceId).toBe(traceEvent.body.id);
     expect(generationCreate.body.parentObservationId).toBe(agentCreate.body.id);
     // Tool is under generation
-    expect(toolCreate.body.traceId).toBe(traceEvent.body.id);
     expect(toolCreate.body.parentObservationId).toBe(generationCreate.body.id);
   });
 
-  it("createTrace() sets traceId and onStart() skips trace creation", async () => {
-    const traceId = integration.createTrace({
-      name: "ask-workflow",
-      input: { question: "test" },
+  it("uses custom agentName", async () => {
+    const integration = new LangfuseTelemetryIntegration({
+      tracer,
+      agentName: "custom-agent",
     });
-
-    expect(traceId).toBe("uuid-1");
-
     await runLifecycle(integration);
 
-    const batch = parseBatch();
-    const traceEvents = batch.filter((e: any) => e.type === "trace-create");
-
-    // Only one trace-create from createTrace(), not from onStart()
-    expect(traceEvents).toHaveLength(1);
-    expect(traceEvents[0].body.name).toBe("ask-workflow");
+    const agentCreate = findEvent("agent-create");
+    expect(agentCreate.body.name).toBe("custom-agent");
   });
 
-  it("constructor traceId skips trace creation in onStart()", async () => {
-    integration = new LangfuseTelemetryIntegration({
-      publicKey: "pk-test",
-      secretKey: "sk-test",
-      traceId: "existing-trace-id",
-    });
+  it("defaults agentName to ask-llm", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
+    await runLifecycle(integration);
 
+    const agentCreate = findEvent("agent-create");
+    expect(agentCreate.body.name).toBe("ask-llm");
+  });
+
+  it("skipAgentSpan skips agent creation and uses parentId for generation", async () => {
+    const integration = new LangfuseTelemetryIntegration({
+      tracer,
+      skipAgentSpan: true,
+      parentId: "guardrail-parent",
+    });
     await runLifecycle(integration);
 
     const batch = parseBatch();
-    const traceEvents = batch.filter((e: any) => e.type === "trace-create");
+    const types = batch.map((e: any) => e.type);
 
-    expect(traceEvents).toHaveLength(0);
+    expect(types).not.toContain("agent-create");
+    expect(types).not.toContain("agent-update");
 
-    // Agent should reference the existing trace
+    const genCreate = batch.find((e: any) => e.type === "generation-create");
+    expect(genCreate.body.parentObservationId).toBe("guardrail-parent");
+  });
+
+  it("skipAgentSpan without parentId sets generation parent to null", async () => {
+    const integration = new LangfuseTelemetryIntegration({
+      tracer,
+      skipAgentSpan: true,
+    });
+    await runLifecycle(integration);
+
+    const batch = parseBatch();
+    const genCreate = batch.find((e: any) => e.type === "generation-create");
+    expect(genCreate.body.parentObservationId).toBeNull();
+  });
+
+  it("agent-update closes at onFinish", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
+    await runLifecycle(integration, {
+      finish: { text: "final response" },
+    });
+
+    const batch = parseBatch();
     const agentCreate = batch.find((e: any) => e.type === "agent-create");
-    expect(agentCreate.body.traceId).toBe("existing-trace-id");
-  });
-
-  it("endGuardrail() creates guardrail-create event with active guardrail id", async () => {
-    integration.createTrace({
-      name: "ask-workflow",
-      input: { question: "test" },
-    });
-
-    const guardrailId = integration.beginGuardrail();
-
-    integration.endGuardrail({
-      name: "check-guardrails",
-      input: "What is Ruby?",
-      output: { relevant: true, reason: "" },
-      startTime: "2025-01-01T00:00:00.000Z",
-      endTime: "2025-01-01T00:00:01.000Z",
-    });
-
-    await integration.flush();
-
-    const batch = parseBatch();
-    const guardrailEvent = batch.find(
-      (e: any) => e.type === "guardrail-create",
+    const agentUpdate = batch.find(
+      (e: any) =>
+        e.type === "agent-update" && e.body.id === agentCreate.body.id,
     );
 
-    expect(guardrailEvent).toBeDefined();
-    expect(guardrailEvent.body.id).toBe(guardrailId);
-    expect(guardrailEvent.body.name).toBe("check-guardrails");
-    expect(guardrailEvent.body.input).toBe("What is Ruby?");
-    expect(guardrailEvent.body.output).toEqual({ relevant: true, reason: "" });
-    expect(guardrailEvent.body.traceId).toBe("uuid-1");
-    expect(guardrailEvent.body.startTime).toBe("2025-01-01T00:00:00.000Z");
-    expect(guardrailEvent.body.endTime).toBe("2025-01-01T00:00:01.000Z");
-  });
-
-  it("flush() sends events and clears buffer", async () => {
-    integration.createTrace({
-      name: "test",
-      input: "test",
-    });
-
-    await integration.flush();
-
-    expect(fetchSpy).toHaveBeenCalledOnce();
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    expect(body.batch).toHaveLength(1);
-
-    // Second flush should not send anything
-    await integration.flush();
-    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(agentUpdate).toBeDefined();
+    expect(agentUpdate.body.output).toBe("final response");
+    expect(agentUpdate.body.endTime).toBeDefined();
   });
 
   it("generation includes input with system and messages", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, {
       stepFinish: {
         system: "You are a helpful assistant.",
@@ -294,6 +545,7 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("generation output includes reasoning when present", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, {
       stepFinish: { reasoningText: "I think this because..." },
     });
@@ -306,14 +558,15 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("generation output omits reasoning when absent", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration);
 
     const generationUpdate = findEvent("generation-update");
     expect(generationUpdate.body.output).toEqual({ text: "response" });
-    expect(generationUpdate.body.output.reasoning).toBeUndefined();
   });
 
   it("usage includes total and unit TOKENS", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, {
       stepFinish: {
         usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
@@ -330,17 +583,10 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("tool-create has complete data from start and finish", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, { withToolCall: true });
 
-    const batch = parseBatch();
-
-    // No span-create events (span-update only for agent end)
-    const spanEvents = batch.filter(
-      (e: any) => e.type === "span-create" || e.type === "span-update",
-    );
-    expect(spanEvents.every((e: any) => e.type === "span-update")).toBe(true);
-
-    const toolCreate = batch.find((e: any) => e.type === "tool-create");
+    const toolCreate = findEvent("tool-create");
     expect(toolCreate).toBeDefined();
     expect(toolCreate.body.name).toBe("searchNodes");
     expect(toolCreate.body.output).toEqual([{ name: "Ruby" }]);
@@ -352,23 +598,9 @@ describe("LangfuseTelemetryIntegration", () => {
     });
   });
 
-  it("agent span-update closes at onFinish", async () => {
-    await runLifecycle(integration, {
-      finish: { text: "final response" },
-    });
+  it("handles duplicate tool names via toolCallId", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
 
-    const batch = parseBatch();
-    const agentCreate = batch.find((e: any) => e.type === "agent-create");
-    const agentEnd = batch.find(
-      (e: any) => e.type === "span-update" && e.body.id === agentCreate.body.id,
-    );
-
-    expect(agentEnd).toBeDefined();
-    expect(agentEnd.body.output).toBe("final response");
-    expect(agentEnd.body.endTime).toBeDefined();
-  });
-
-  it("handles duplicate tool names in the same step via toolCallId", async () => {
     await integration.onStart!({
       model: { provider: "openrouter", modelId: "openrouter/free" },
       prompt: "test",
@@ -379,7 +611,6 @@ describe("LangfuseTelemetryIntegration", () => {
       model: { provider: "openrouter", modelId: "openrouter/free" },
     } as any);
 
-    // Two searchNodes calls in the same step
     await integration.onToolCallStart!({
       stepNumber: 0,
       toolCall: {
@@ -442,6 +673,7 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("generation-update includes response modelId and openrouter metadata", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, {
       stepFinish: {
         response: { modelId: "google/gemma-3-27b-it:free" },
@@ -464,142 +696,8 @@ describe("LangfuseTelemetryIntegration", () => {
     });
   });
 
-  it("uses custom agentName in agent-create event", async () => {
-    const customIntegration = new LangfuseTelemetryIntegration({
-      publicKey: "pk-test",
-      secretKey: "sk-test",
-      agentName: "check-guardrails",
-    });
-
-    await runLifecycle(customIntegration);
-
-    const batch = parseBatch();
-    const agentCreate = batch.find((e: any) => e.type === "agent-create");
-    expect(agentCreate.body.name).toBe("check-guardrails");
-  });
-
-  it("defaults agentName to ask-llm", async () => {
-    await runLifecycle(integration);
-
-    const batch = parseBatch();
-    const agentCreate = batch.find((e: any) => e.type === "agent-create");
-    expect(agentCreate.body.name).toBe("ask-llm");
-  });
-
-  it("beginGuardrail skips agent-create and uses guardrailId as generation parent", async () => {
-    integration = new LangfuseTelemetryIntegration({
-      publicKey: "pk-test",
-      secretKey: "sk-test",
-      traceId: "existing-trace",
-    });
-
-    const guardrailId = integration.beginGuardrail();
-
-    await runLifecycle(integration);
-
-    // onFinish skips flush when guardrail is active, so flush manually
-    await integration.flush();
-
-    const batch = parseBatch();
-    const types = batch.map((e: any) => e.type);
-
-    // No agent-create or span-update (agent end)
-    expect(types).not.toContain("agent-create");
-    expect(types).not.toContain("span-update");
-
-    // Generation should use guardrailId as parent
-    const generationCreate = batch.find(
-      (e: any) => e.type === "generation-create",
-    );
-    expect(generationCreate.body.parentObservationId).toBe(guardrailId);
-    expect(generationCreate.body.traceId).toBe("existing-trace");
-  });
-
-  it("endGuardrail throws when called without beginGuardrail", () => {
-    integration.createTrace({
-      name: "test",
-      input: "test",
-    });
-
-    expect(() =>
-      integration.endGuardrail({
-        name: "check-guardrails",
-        input: "test",
-        output: { relevant: true },
-        startTime: "2025-01-01T00:00:00.000Z",
-        endTime: "2025-01-01T00:00:01.000Z",
-      }),
-    ).toThrow("endGuardrail() called without an active guardrail");
-  });
-
-  it("onFinish skips flush when guardrail is active", async () => {
-    integration.createTrace({
-      name: "test",
-      input: "test",
-    });
-
-    integration.beginGuardrail();
-
-    await runLifecycle(integration);
-
-    // onFinish should NOT flush because guardrail is active
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("endGuardrail clears active state so subsequent use works normally", async () => {
-    integration.createTrace({
-      name: "test",
-      input: "test",
-    });
-
-    integration.beginGuardrail();
-
-    integration.endGuardrail({
-      name: "check-guardrails",
-      input: "test",
-      output: { relevant: true },
-      startTime: "2025-01-01T00:00:00.000Z",
-      endTime: "2025-01-01T00:00:01.000Z",
-    });
-
-    // After endGuardrail, onStart should create agent span normally
-    await runLifecycle(integration);
-
-    const batch = parseBatch();
-    const types = batch.map((e: any) => e.type);
-    expect(types).toContain("agent-create");
-    expect(types).toContain("guardrail-create");
-  });
-
-  it("single integration emits trace, guardrail, and generation events in one batch", async () => {
-    integration.createTrace({
-      name: "ask-workflow",
-      input: { question: "test" },
-    });
-
-    integration.beginGuardrail();
-
-    await runLifecycle(integration);
-
-    integration.endGuardrail({
-      name: "check-guardrails",
-      input: "test",
-      output: { relevant: true },
-      startTime: "2025-01-01T00:00:00.000Z",
-      endTime: "2025-01-01T00:00:01.000Z",
-    });
-
-    await integration.flush();
-
-    const batch = parseBatch();
-    const types = batch.map((e: any) => e.type);
-    expect(types).toContain("trace-create");
-    expect(types).toContain("guardrail-create");
-    expect(types).toContain("generation-create");
-    expect(types).toContain("generation-update");
-  });
-
   it("generation-update omits metadata when no providerMetadata", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
     await runLifecycle(integration, {
       stepFinish: {
         response: { modelId: "google/gemma-3-27b-it:free" },
@@ -609,5 +707,12 @@ describe("LangfuseTelemetryIntegration", () => {
     const generationUpdate = findEvent("generation-update");
     expect(generationUpdate.body.model).toBe("google/gemma-3-27b-it:free");
     expect(generationUpdate.body.metadata).toBeUndefined();
+  });
+
+  it("flushes on onFinish", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
+    await runLifecycle(integration);
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
   });
 });

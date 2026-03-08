@@ -3,14 +3,13 @@ import type { TelemetryIntegration } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { getLanguageName } from "./prompt";
-import type { Flushable } from "../telemetry/langfuse";
-import { buildTelemetryConfig, flushIntegrations } from "./telemetry-helpers";
+import { buildTelemetryConfig } from "./telemetry-helpers";
 
 export interface CheckGuardrailsOptions {
   question: string;
   apiKey: string;
   locale?: string;
-  integrations?: (TelemetryIntegration & Flushable)[];
+  integrations?: TelemetryIntegration[];
 }
 
 export interface GuardrailsResult {
@@ -72,7 +71,6 @@ export async function checkGuardrails(
 
     return output ?? FAIL_OPEN;
   } catch {
-    await flushIntegrations(options.integrations);
     return FAIL_OPEN;
   }
 }

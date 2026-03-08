@@ -6,24 +6,24 @@ import {
 import { askLLM, checkGuardrails } from "../agent";
 import { patchDiscordResponse } from "../discord/api";
 import { formatForDiscord } from "../format";
-import { LangfuseTelemetryIntegration } from "../telemetry/langfuse";
+import { LangfuseClient } from "../telemetry/client";
+import { LangfuseTracer } from "../telemetry/tracer";
+import { LangfuseTelemetryIntegration } from "../telemetry/integration";
 
-function createTelemetryIntegration(
-  env: Env,
-  options?: {
-    traceId?: string;
-  },
-): LangfuseTelemetryIntegration | undefined {
+function createTracer(env: Env): LangfuseTracer | undefined {
   if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) {
     return undefined;
   }
 
-  return new LangfuseTelemetryIntegration({
+  const client = new LangfuseClient({
     publicKey: env.LANGFUSE_PUBLIC_KEY,
     secretKey: env.LANGFUSE_SECRET_KEY,
     baseUrl: env.LANGFUSE_BASE_URL,
+  });
+
+  return new LangfuseTracer({
+    client,
     environment: env.ENVIRONMENT,
-    traceId: options?.traceId,
   });
 }
 
@@ -45,35 +45,46 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       "check-guardrails",
       { retries: { limit: 0, delay: "1 second" } },
       async () => {
-        const integration = createTelemetryIntegration(this.env);
+        const tracer = createTracer(this.env);
         let traceId: string | undefined;
 
-        if (integration) {
-          traceId = integration.createTrace({
+        if (tracer) {
+          traceId = tracer.createTrace({
             name: "ask-workflow",
             input: { question, locale },
           });
+
+          const guardrailIntegration = new LangfuseTelemetryIntegration({
+            tracer,
+            skipAgentSpan: true,
+          });
+
+          const startTime = new Date().toISOString();
+          const result = await checkGuardrails({
+            question,
+            apiKey: this.env.OPENROUTER_API_KEY,
+            locale,
+            integrations: [guardrailIntegration],
+          });
+          const endTime = new Date().toISOString();
+
+          tracer.createGuardrail({
+            name: "check-guardrails",
+            input: question,
+            output: result,
+            startTime,
+            endTime,
+          });
+          await tracer.flush();
+
+          return { ...result, traceId };
         }
 
-        integration?.beginGuardrail();
-
-        const startTime = new Date().toISOString();
         const result = await checkGuardrails({
           question,
           apiKey: this.env.OPENROUTER_API_KEY,
           locale,
-          integrations: integration ? [integration] : undefined,
         });
-        const endTime = new Date().toISOString();
-
-        integration?.endGuardrail({
-          name: "check-guardrails",
-          input: question,
-          output: result,
-          startTime,
-          endTime,
-        });
-        await integration?.flush();
 
         return { ...result, traceId };
       },
@@ -98,19 +109,31 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "ask-llm",
         { retries: { limit: 1, delay: "5 seconds" } },
         async () => {
-          const llmIntegration = createTelemetryIntegration(this.env, {
-            traceId: guardrails.traceId,
-          });
-          const integrations = llmIntegration ? [llmIntegration] : undefined;
+          const tracer = createTracer(this.env);
+          let integrations: LangfuseTelemetryIntegration[] | undefined;
 
-          return await askLLM({
-            question,
-            apiKey: this.env.OPENROUTER_API_KEY,
-            internalApi: this.env.INTERNAL_API,
-            internalApiUrl: this.env.INTERNAL_API_URL,
-            locale,
-            integrations,
-          });
+          if (tracer && guardrails.traceId) {
+            tracer.setTraceId(guardrails.traceId);
+            const llmIntegration = new LangfuseTelemetryIntegration({
+              tracer,
+              agentName: "ask-llm",
+            });
+            integrations = [llmIntegration];
+          }
+
+          try {
+            return await askLLM({
+              question,
+              apiKey: this.env.OPENROUTER_API_KEY,
+              internalApi: this.env.INTERNAL_API,
+              internalApiUrl: this.env.INTERNAL_API_URL,
+              locale,
+              integrations,
+            });
+          } catch (error) {
+            await tracer?.flush();
+            throw error;
+          }
         },
       );
     } catch (error) {

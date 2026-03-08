@@ -168,19 +168,4 @@ describe("checkGuardrails", () => {
       }),
     );
   });
-
-  it("flushes integrations on error before fail-open", async () => {
-    mockedGenerateText.mockRejectedValue(new Error("API error"));
-
-    const mockIntegration = { flush: vi.fn().mockResolvedValue(undefined) };
-
-    const result = await checkGuardrails({
-      question: "test question",
-      apiKey: "test-key",
-      integrations: [mockIntegration as any],
-    });
-
-    expect(result).toEqual({ relevant: true, reason: "" });
-    expect(mockIntegration.flush).toHaveBeenCalledOnce();
-  });
 });

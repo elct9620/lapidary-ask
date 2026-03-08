@@ -2,8 +2,7 @@ import { generateText, stepCountIs, type TelemetryIntegration } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt } from "./prompt";
 import { createTools } from "./tools";
-import type { Flushable } from "../telemetry/langfuse";
-import { buildTelemetryConfig, flushIntegrations } from "./telemetry-helpers";
+import { buildTelemetryConfig } from "./telemetry-helpers";
 
 export interface AskLLMOptions {
   question: string;
@@ -11,7 +10,7 @@ export interface AskLLMOptions {
   internalApi: Fetcher;
   internalApiUrl: string;
   locale?: string;
-  integrations?: (TelemetryIntegration & Flushable)[];
+  integrations?: TelemetryIntegration[];
 }
 
 export async function askLLM(options: AskLLMOptions): Promise<string> {
@@ -25,18 +24,13 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
   } = options;
   const openrouter = createOpenRouter({ apiKey });
   const tools = createTools(internalApi, internalApiUrl);
-  try {
-    const { text } = await generateText({
-      model: openrouter("openrouter/free"),
-      system: buildSystemPrompt(locale),
-      prompt: question,
-      tools,
-      stopWhen: stepCountIs(15),
-      ...buildTelemetryConfig(integrations),
-    });
-    return text || "No response.";
-  } catch (error) {
-    await flushIntegrations(integrations);
-    throw error;
-  }
+  const { text } = await generateText({
+    model: openrouter("openrouter/free"),
+    system: buildSystemPrompt(locale),
+    prompt: question,
+    tools,
+    stopWhen: stepCountIs(15),
+    ...buildTelemetryConfig(integrations),
+  });
+  return text || "No response.";
 }
