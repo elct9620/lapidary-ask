@@ -30,26 +30,29 @@ Discord command registration reads credentials from `.dev.vars` file.
 The project follows a layered architecture under `src/`:
 
 - **Entry point**: `src/index.tsx` — Hono app with health check (`GET /`) and Discord webhook (`POST /api/webhooks/discord`)
-- **Bot setup**: `src/bot.ts` — Creates `Chat` instance, wires Discord adapter and registers command handlers
-- **Handlers**: `src/handlers/` — Command handlers (e.g., `ask.ts` registers the `/ask` slash command handler)
+- **Discord layer**: `src/discord.ts` — Webhook signature verification, interaction routing, deferred response via Cloudflare Workflow
+  - `src/discord/api.ts` — `patchDiscordResponse()` helper for Discord API calls
+  - `src/discord/helpers.ts` — Extracts typed options from slash command interactions
+- **Workflow**: `src/workflows/ask.ts` — `AskWorkflow` (Cloudflare Workflow) orchestrates LLM call and Discord response with retries
 - **Agent (LLM)**: `src/agent/` — LLM integration layer
-  - `client.ts` — `askLLM()` function using Vercel AI SDK with OpenRouter (`openrouter/auto`)
-  - `tools.ts` — AI SDK tool definitions for querying Lapidary Knowledge Graph (to be implemented per SPEC.md)
-  - `prompt.ts` — System prompt in Traditional Chinese
-- **Discord adapter**: `src/adapter/discord/` — Custom Discord adapter implementing the `chat` package's `Adapter` interface
-  - `adapter.ts` — Webhook verification, interaction handling, deferred responses via `AsyncLocalStorage`
-  - `helpers.ts` — Extracts typed options from slash command interactions
-  - `format.ts` — Discord message formatting
-- **Command definitions**: `src/commands.ts` — Discord slash command registration metadata
+  - `client.ts` — `askLLM()` using Vercel AI SDK with OpenRouter (`openrouter/free`)
+  - `tools.ts` — AI SDK tool definitions (`searchNodes`, `getNeighbors`) for querying Lapidary Knowledge Graph via `INTERNAL_API` service binding
+  - `prompt.ts` — Locale-aware system prompt builder (maps Discord locale to response language)
+- **Formatting**: `src/format.ts` — Wraps GFM tables in code blocks for Discord, truncates to 2000 chars
+- **Command definitions**: `src/commands.ts` — Discord slash command registration metadata (with zh-TW and ja localizations)
 - **Registration script**: `scripts/register.ts` — Registers/clears slash commands via Discord API
 
 ### Request Flow
 
-1. Discord sends webhook → Hono route → `bot.webhooks.discord()`
-2. `DiscordAdapter` verifies signature, defers response, dispatches to `Chat`
-3. `Chat` triggers the registered `/ask` handler in `src/handlers/ask.ts`
-4. Handler calls `askLLM()` which invokes OpenRouter with tools
-5. Response posted back via Discord interaction webhook (PATCH for initial, POST for follow-ups)
+1. Discord sends webhook → Hono route → `handleDiscordWebhook()`
+2. Verifies Ed25519 signature, defers response (ACK), spawns `AskWorkflow`
+3. `AskWorkflow.run()` calls `askLLM()` with tools (max 15 steps)
+4. Tools query Lapidary Knowledge Graph via VPC service binding
+5. Response patched back via Discord interaction webhook
+
+### Cloudflare Workflows
+
+`step.do()` calls must be placed directly inside the `run()` method for proper step visibility and tracing — do not wrap them in helper functions.
 
 ## Testing
 
@@ -67,3 +70,4 @@ The `vitest.config.ts` configures SSR optimization for `discord-api-types` and `
 | `OPENROUTER_API_KEY`     | Secret          | OpenRouter API auth                |
 | `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API (VPC) |
 | `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests |
+| `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow binding        |
