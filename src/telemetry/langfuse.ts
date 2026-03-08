@@ -188,10 +188,12 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         name: `step-${stepNumber}`,
         model: event.model?.modelId,
         startTime: new Date().toISOString(),
-        input: {
-          system: event.system,
-          messages: event.messages,
-        },
+        input: [
+          ...(event.system
+            ? [{ role: "system" as const, content: event.system }]
+            : []),
+          ...(event.messages ?? []),
+        ],
       },
     });
   }

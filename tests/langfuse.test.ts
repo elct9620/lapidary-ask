@@ -283,10 +283,10 @@ describe("LangfuseTelemetryIntegration", () => {
     });
 
     const generationCreate = findEvent("generation-create");
-    expect(generationCreate.body.input).toEqual({
-      system: "You are a helpful assistant.",
-      messages: [{ role: "user", content: "Hello" }],
-    });
+    expect(generationCreate.body.input).toEqual([
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: "Hello" },
+    ]);
   });
 
   it("generation output includes reasoning when present", async () => {

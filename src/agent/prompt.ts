@@ -63,6 +63,11 @@ Always follow this workflow to answer questions:
 3. \`getNeighbors({ nodeId: "rubyist://nobu" })\` → check if Array appears in connections
 4. Answer describing the specific relationship (Maintenance/Contribute) between them.
 
+## Error Handling
+
+- If a tool call fails (e.g., network error, timeout), retry the same call 1-2 times before giving up.
+- If retries still fail, inform the user that the data is temporarily unavailable.
+
 ## Response Guidelines
 
 - **Objectivity**: Describe relationships factually based on what the knowledge graph shows. Use objective language such as "根據知識圖譜的紀錄，..." or "在 Issue Tracker 的紀錄中，...".
