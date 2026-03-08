@@ -20,7 +20,6 @@ export interface LangfuseConfig {
   environment?: string;
   traceId?: string;
   agentName?: string;
-  parentObservationId?: string;
 }
 
 interface LangfuseEvent {
@@ -36,8 +35,7 @@ interface PendingToolCall {
   input: unknown;
 }
 
-export interface RecordGuardrailOptions {
-  id?: string;
+export interface EndGuardrailOptions {
   name: string;
   input: unknown;
   output: unknown;
@@ -52,10 +50,10 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
   private readonly baseUrl: string;
   private readonly environment: string | undefined;
   private readonly agentName: string;
-  private readonly parentObservationId: string | null;
   private events: LangfuseEvent[] = [];
   private traceId: string | null = null;
   private agentId: string | null = null;
+  private activeGuardrailId: string | null = null;
   private generationIds: Map<number, string> = new Map();
   private pendingToolCalls: Map<string, PendingToolCall> = new Map();
 
@@ -65,7 +63,6 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     this.baseUrl = config.baseUrl ?? "https://cloud.langfuse.com";
     this.environment = config.environment;
     this.agentName = config.agentName ?? "ask-llm";
-    this.parentObservationId = config.parentObservationId ?? null;
     if (config.traceId) {
       this.traceId = config.traceId;
     }
@@ -96,8 +93,19 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     return this.traceId;
   }
 
-  recordGuardrail(options: RecordGuardrailOptions): string {
-    const guardrailId = options.id ?? crypto.randomUUID();
+  beginGuardrail(): string {
+    const guardrailId = crypto.randomUUID();
+    this.activeGuardrailId = guardrailId;
+    return guardrailId;
+  }
+
+  endGuardrail(options: EndGuardrailOptions): string {
+    if (!this.activeGuardrailId) {
+      throw new Error(
+        "endGuardrail() called without an active guardrail. Call beginGuardrail() first.",
+      );
+    }
+    const guardrailId = this.activeGuardrailId;
     this.events.push({
       id: crypto.randomUUID(),
       type: "guardrail-create",
@@ -113,6 +121,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         ...(options.metadata && { metadata: options.metadata }),
       },
     });
+    this.activeGuardrailId = null;
     return guardrailId;
   }
 
@@ -160,7 +169,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       });
     }
 
-    if (!this.parentObservationId) {
+    if (!this.activeGuardrailId) {
       this.agentId = crypto.randomUUID();
       this.events.push({
         id: crypto.randomUUID(),
@@ -188,7 +197,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       body: {
         id: generationId,
         traceId: this.traceId,
-        parentObservationId: this.parentObservationId ?? this.agentId,
+        parentObservationId: this.activeGuardrailId ?? this.agentId,
         name: `step-${stepNumber}`,
         model: event.model?.modelId,
         startTime: new Date().toISOString(),
@@ -292,6 +301,8 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       });
     }
 
-    await this.flush();
+    if (!this.activeGuardrailId) {
+      await this.flush();
+    }
   };
 }

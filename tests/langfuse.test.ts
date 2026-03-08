@@ -228,13 +228,15 @@ describe("LangfuseTelemetryIntegration", () => {
     expect(agentCreate.body.traceId).toBe("existing-trace-id");
   });
 
-  it("recordGuardrail() creates guardrail-create event", async () => {
+  it("endGuardrail() creates guardrail-create event with active guardrail id", async () => {
     integration.createTrace({
       name: "ask-workflow",
       input: { question: "test" },
     });
 
-    integration.recordGuardrail({
+    const guardrailId = integration.beginGuardrail();
+
+    integration.endGuardrail({
       name: "check-guardrails",
       input: "What is Ruby?",
       output: { relevant: true, reason: "" },
@@ -250,6 +252,7 @@ describe("LangfuseTelemetryIntegration", () => {
     );
 
     expect(guardrailEvent).toBeDefined();
+    expect(guardrailEvent.body.id).toBe(guardrailId);
     expect(guardrailEvent.body.name).toBe("check-guardrails");
     expect(guardrailEvent.body.input).toBe("What is Ruby?");
     expect(guardrailEvent.body.output).toEqual({ relevant: true, reason: "" });
@@ -483,15 +486,19 @@ describe("LangfuseTelemetryIntegration", () => {
     expect(agentCreate.body.name).toBe("ask-llm");
   });
 
-  it("parentObservationId skips agent-create and uses it as generation parent", async () => {
-    const parentIntegration = new LangfuseTelemetryIntegration({
+  it("beginGuardrail skips agent-create and uses guardrailId as generation parent", async () => {
+    integration = new LangfuseTelemetryIntegration({
       publicKey: "pk-test",
       secretKey: "sk-test",
       traceId: "existing-trace",
-      parentObservationId: "guardrail-obs-id",
     });
 
-    await runLifecycle(parentIntegration);
+    const guardrailId = integration.beginGuardrail();
+
+    await runLifecycle(integration);
+
+    // onFinish skips flush when guardrail is active, so flush manually
+    await integration.flush();
 
     const batch = parseBatch();
     const types = batch.map((e: any) => e.type);
@@ -500,39 +507,54 @@ describe("LangfuseTelemetryIntegration", () => {
     expect(types).not.toContain("agent-create");
     expect(types).not.toContain("span-update");
 
-    // Generation should use parentObservationId
+    // Generation should use guardrailId as parent
     const generationCreate = batch.find(
       (e: any) => e.type === "generation-create",
     );
-    expect(generationCreate.body.parentObservationId).toBe("guardrail-obs-id");
+    expect(generationCreate.body.parentObservationId).toBe(guardrailId);
     expect(generationCreate.body.traceId).toBe("existing-trace");
   });
 
-  it("recordGuardrail returns generated ID when no id provided", async () => {
+  it("endGuardrail throws when called without beginGuardrail", () => {
     integration.createTrace({
       name: "test",
       input: "test",
     });
 
-    const id = integration.recordGuardrail({
-      name: "check-guardrails",
-      input: "test",
-      output: { relevant: true },
-      startTime: "2025-01-01T00:00:00.000Z",
-      endTime: "2025-01-01T00:00:01.000Z",
-    });
-
-    expect(id).toMatch(/^uuid-/);
+    expect(() =>
+      integration.endGuardrail({
+        name: "check-guardrails",
+        input: "test",
+        output: { relevant: true },
+        startTime: "2025-01-01T00:00:00.000Z",
+        endTime: "2025-01-01T00:00:01.000Z",
+      }),
+    ).toThrow("endGuardrail() called without an active guardrail");
   });
 
-  it("recordGuardrail uses pre-specified id", async () => {
+  it("onFinish skips flush when guardrail is active", async () => {
     integration.createTrace({
       name: "test",
       input: "test",
     });
 
-    const id = integration.recordGuardrail({
-      id: "my-guardrail-id",
+    integration.beginGuardrail();
+
+    await runLifecycle(integration);
+
+    // onFinish should NOT flush because guardrail is active
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("endGuardrail clears active state so subsequent use works normally", async () => {
+    integration.createTrace({
+      name: "test",
+      input: "test",
+    });
+
+    integration.beginGuardrail();
+
+    integration.endGuardrail({
       name: "check-guardrails",
       input: "test",
       output: { relevant: true },
@@ -540,12 +562,41 @@ describe("LangfuseTelemetryIntegration", () => {
       endTime: "2025-01-01T00:00:01.000Z",
     });
 
-    expect(id).toBe("my-guardrail-id");
+    // After endGuardrail, onStart should create agent span normally
+    await runLifecycle(integration);
+
+    const batch = parseBatch();
+    const types = batch.map((e: any) => e.type);
+    expect(types).toContain("agent-create");
+    expect(types).toContain("guardrail-create");
+  });
+
+  it("single integration emits trace, guardrail, and generation events in one batch", async () => {
+    integration.createTrace({
+      name: "ask-workflow",
+      input: { question: "test" },
+    });
+
+    integration.beginGuardrail();
+
+    await runLifecycle(integration);
+
+    integration.endGuardrail({
+      name: "check-guardrails",
+      input: "test",
+      output: { relevant: true },
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+    });
 
     await integration.flush();
 
-    const guardrailEvent = findEvent("guardrail-create");
-    expect(guardrailEvent.body.id).toBe("my-guardrail-id");
+    const batch = parseBatch();
+    const types = batch.map((e: any) => e.type);
+    expect(types).toContain("trace-create");
+    expect(types).toContain("guardrail-create");
+    expect(types).toContain("generation-create");
+    expect(types).toContain("generation-update");
   });
 
   it("generation-update omits metadata when no providerMetadata", async () => {
