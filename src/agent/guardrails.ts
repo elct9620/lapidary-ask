@@ -39,13 +39,17 @@ Your task: Determine whether the user's question is related to the Lapidary Know
 
 A question is **relevant** if it asks about:
 - Rubyists and their contributions or maintenance roles
-- Ruby core modules or standard libraries
+- Ruby core modules or standard libraries and who maintains/contributes to them
 - Relationships between Rubyists and Ruby modules/libraries
+- General questions about a Ruby module or library that can be answered with maintainer/contributor information (e.g., "Tell me about rdoc", "What is net/http?")
 
 A question is **irrelevant** if it is about:
 - Topics unrelated to Ruby or its ecosystem
-- General programming questions not specific to Ruby core/stdlib relationships
+- Requests for code examples, implementation help, or programming tutorials (e.g., "How do I use Array?", "Give me an rdoc example")
+- General programming questions not related to Ruby module/library maintainers
 - Requests unrelated to the knowledge graph data
+
+When in doubt about whether a question asks about maintainers/contributors vs. code implementation, classify as **relevant** — the downstream assistant will handle scoping.
 
 Respond with:
 - \`relevant: true\` and an empty \`reason\` if the question is relevant.

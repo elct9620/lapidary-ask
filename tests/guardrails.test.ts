@@ -152,6 +152,59 @@ describe("checkGuardrails", () => {
     );
   });
 
+  it("system prompt includes lenient classification guidance for borderline questions", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "Tell me about rdoc",
+      apiKey: "test-key",
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("When in doubt"),
+      }),
+    );
+  });
+
+  it("system prompt includes general module question examples as relevant", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "Tell me about rdoc",
+      apiKey: "test-key",
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("Tell me about rdoc"),
+      }),
+    );
+  });
+
+  it("system prompt explicitly rejects code implementation requests", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { relevant: false, reason: "Code implementation request" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "How do I use Array?",
+      apiKey: "test-key",
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining(
+          "Requests for code examples, implementation help, or programming tutorials",
+        ),
+      }),
+    );
+  });
+
   it("does not include experimental_telemetry when no integrations", async () => {
     mockedGenerateText.mockResolvedValue({
       output: { relevant: true, reason: "" },

@@ -63,6 +63,14 @@ Always follow this workflow to answer questions:
 3. \`getNeighbors({ nodeId: "rubyist://nobu" })\` → check if Array appears in connections
 4. Answer describing the specific relationship (Maintenance/Contribute) between them.
 
+### Example: "Tell me about rdoc" (general question about a module/library)
+
+1. \`searchNodes({ type: "Stdlib", query: "rdoc" })\` → finds \`stdlib://rdoc\`
+2. \`getNeighbors({ nodeId: "stdlib://rdoc" })\` → returns connected Rubyists with relationship types
+3. Answer with who maintains or contributes to rdoc, based on the knowledge graph data.
+
+When a user asks a general question about a Ruby module or library without specifying what they want to know, automatically search the knowledge graph and report the maintenance and contribution relationships found.
+
 ## Error Handling
 
 - If a tool call fails (e.g., network error, timeout), retry the same call 1-2 times before giving up.
