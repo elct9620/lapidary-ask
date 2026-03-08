@@ -8,6 +8,23 @@ import { patchDiscordResponse } from "../discord/api";
 import { formatForDiscord } from "../format";
 import { LangfuseTelemetryIntegration } from "../telemetry/langfuse";
 
+function createTelemetryIntegration(
+  env: Env,
+  traceId?: string,
+): LangfuseTelemetryIntegration | undefined {
+  if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) {
+    return undefined;
+  }
+
+  return new LangfuseTelemetryIntegration({
+    publicKey: env.LANGFUSE_PUBLIC_KEY,
+    secretKey: env.LANGFUSE_SECRET_KEY,
+    baseUrl: env.LANGFUSE_BASE_URL,
+    environment: env.ENVIRONMENT,
+    traceId,
+  });
+}
+
 export interface AskWorkflowParams {
   question: string;
   interactionToken: string;
@@ -26,17 +43,10 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       "check-guardrails",
       { retries: { limit: 0, delay: "1 second" } },
       async () => {
+        const integration = createTelemetryIntegration(this.env);
         let traceId: string | undefined;
-        let integration: LangfuseTelemetryIntegration | undefined;
 
-        if (this.env.LANGFUSE_PUBLIC_KEY && this.env.LANGFUSE_SECRET_KEY) {
-          integration = new LangfuseTelemetryIntegration({
-            publicKey: this.env.LANGFUSE_PUBLIC_KEY,
-            secretKey: this.env.LANGFUSE_SECRET_KEY,
-            baseUrl: this.env.LANGFUSE_BASE_URL,
-            environment: this.env.ENVIRONMENT,
-          });
-
+        if (integration) {
           traceId = integration.createTrace({
             name: "ask-workflow",
             input: { question, locale },
@@ -85,18 +95,11 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "ask-llm",
         { retries: { limit: 1, delay: "5 seconds" } },
         async () => {
-          const integrations =
-            this.env.LANGFUSE_PUBLIC_KEY && this.env.LANGFUSE_SECRET_KEY
-              ? [
-                  new LangfuseTelemetryIntegration({
-                    publicKey: this.env.LANGFUSE_PUBLIC_KEY,
-                    secretKey: this.env.LANGFUSE_SECRET_KEY,
-                    baseUrl: this.env.LANGFUSE_BASE_URL,
-                    environment: this.env.ENVIRONMENT,
-                    traceId: guardrails.traceId,
-                  }),
-                ]
-              : undefined;
+          const llmIntegration = createTelemetryIntegration(
+            this.env,
+            guardrails.traceId,
+          );
+          const integrations = llmIntegration ? [llmIntegration] : undefined;
 
           return await askLLM({
             question,

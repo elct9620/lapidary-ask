@@ -2,10 +2,7 @@ import { generateText, stepCountIs, type TelemetryIntegration } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt } from "./prompt";
 import { createTools } from "./tools";
-
-interface Flushable {
-  flush(): Promise<void>;
-}
+import type { Flushable } from "../telemetry/langfuse";
 
 export interface AskLLMOptions {
   question: string;

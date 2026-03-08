@@ -9,6 +9,10 @@ import type {
 import type { TelemetryIntegration } from "ai";
 import type { ToolSet } from "ai";
 
+export interface Flushable {
+  flush(): Promise<void>;
+}
+
 export interface LangfuseConfig {
   publicKey: string;
   secretKey: string;
