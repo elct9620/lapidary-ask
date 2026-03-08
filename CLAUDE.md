@@ -33,11 +33,14 @@ The project follows a layered architecture under `src/`:
 - **Discord layer**: `src/discord.ts` — Webhook signature verification, interaction routing, deferred response via Cloudflare Workflow
   - `src/discord/api.ts` — `patchDiscordResponse()` helper for Discord API calls
   - `src/discord/helpers.ts` — Extracts typed options from slash command interactions
-- **Workflow**: `src/workflows/ask.ts` — `AskWorkflow` (Cloudflare Workflow) orchestrates LLM call and Discord response with retries
+- **Workflow**: `src/workflows/ask.ts` — `AskWorkflow` (Cloudflare Workflow) orchestrates guardrails check, LLM call, and Discord response with retries
 - **Agent (LLM)**: `src/agent/` — LLM integration layer
   - `client.ts` — `askLLM()` using Vercel AI SDK with OpenRouter (`openrouter/free`)
+  - `guardrails.ts` — `checkGuardrails()` lightweight relevance classifier (fail-open on error)
   - `tools.ts` — AI SDK tool definitions (`searchNodes`, `getNeighbors`) for querying Lapidary Knowledge Graph via `INTERNAL_API` service binding
   - `prompt.ts` — Locale-aware system prompt builder (maps Discord locale to response language)
+  - `telemetry-helpers.ts` — `buildTelemetryConfig()` helper for AI SDK telemetry integration
+- **Telemetry**: `src/telemetry/` — Three-layer Langfuse integration (see below)
 - **Formatting**: `src/format.ts` — Wraps GFM tables in code blocks for Discord, truncates to 2000 chars
 - **Command definitions**: `src/commands.ts` — Discord slash command registration metadata (with zh-TW and ja localizations)
 - **Registration script**: `scripts/register.ts` — Registers/clears slash commands via Discord API
@@ -46,19 +49,34 @@ The project follows a layered architecture under `src/`:
 
 1. Discord sends webhook → Hono route → `handleDiscordWebhook()`
 2. Verifies Ed25519 signature, defers response (ACK), spawns `AskWorkflow`
-3. `AskWorkflow.run()` calls `askLLM()` with tools (max 15 steps)
-4. Tools query Lapidary Knowledge Graph via VPC service binding
-5. Response patched back via Discord interaction webhook
+3. `AskWorkflow.run()` runs guardrails check; if rejected, replies with rejection reason
+4. If relevant, calls `askLLM()` with tools (max 15 steps)
+5. Tools query Lapidary Knowledge Graph via VPC service binding
+6. Response patched back via Discord interaction webhook
 
 ### Cloudflare Workflows
 
-`step.do()` calls must be placed directly inside the `run()` method for proper step visibility and tracing — do not wrap them in helper functions.
+`step.do()` calls must be `await`-ed directly inside the `run()` method. The callback logic can be extracted to private methods on the Workflow class — only the `step.do()` invocation itself must remain in `run()`.
+
+### Telemetry Architecture
+
+`src/telemetry/` follows a three-layer design with unidirectional dependency flow (Integration → Tracer → Client):
+
+| Layer           | File             | Responsibility                                                                                                                |
+| --------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Client**      | `client.ts`      | Event buffer + Langfuse REST API batch ingestion                                                                              |
+| **Tracer**      | `tracer.ts`      | Semantic event creation (`createTrace`, `createGeneration`, `createTool`, `createGuardrail`) and trace ID lifecycle           |
+| **Integration** | `integration.ts` | Implements Vercel AI SDK `TelemetryIntegration` hooks (`onStart`, `onStepStart/Finish`, `onToolCallStart/Finish`, `onFinish`) |
+
+The workflow creates a single trace spanning both guardrails and LLM steps by passing `traceId` from the guardrails step to the LLM step via `tracer.setTraceId()`.
 
 ## Testing
 
 Tests use Vitest with `@cloudflare/vitest-pool-workers` to run in a Workers-like environment. Coverage uses Istanbul provider. Test files go in `tests/` directory. Config references `wrangler.jsonc` for worker pool options.
 
 The `vitest.config.ts` configures SSR optimization for `discord-api-types` and `discord-interactions` packages to work in the Workers environment.
+
+Workflow tests use `introspectWorkflowInstance` with `mockStepResult`/`mockStepError` to test step orchestration without executing actual callbacks.
 
 ## Key Bindings
 
@@ -70,4 +88,8 @@ The `vitest.config.ts` configures SSR optimization for `discord-api-types` and `
 | `OPENROUTER_API_KEY`     | Secret          | OpenRouter API auth                |
 | `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API (VPC) |
 | `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests |
+| `LANGFUSE_PUBLIC_KEY`    | Secret          | Langfuse API auth (public key)     |
+| `LANGFUSE_SECRET_KEY`    | Secret          | Langfuse API auth (secret key)     |
+| `LANGFUSE_BASE_URL`      | Variable        | Langfuse API base URL              |
+| `ENVIRONMENT`            | Variable        | Environment name for telemetry     |
 | `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow binding        |

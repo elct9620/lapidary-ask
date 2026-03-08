@@ -35,6 +35,79 @@ export interface AskWorkflowParams {
 }
 
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
+  private async checkGuardrailsStep(question: string, locale: string) {
+    const tracer = createTracer(this.env);
+    let traceId: string | undefined;
+
+    if (tracer) {
+      traceId = tracer.createTrace({
+        name: "ask-workflow",
+        input: { question, locale },
+      });
+
+      const guardrailIntegration = new LangfuseTelemetryIntegration({
+        tracer,
+        skipAgentSpan: true,
+      });
+
+      const startTime = new Date().toISOString();
+      const result = await checkGuardrails({
+        question,
+        apiKey: this.env.OPENROUTER_API_KEY,
+        locale,
+        integrations: [guardrailIntegration],
+      });
+      const endTime = new Date().toISOString();
+
+      tracer.createGuardrail({
+        name: "check-guardrails",
+        input: question,
+        output: result,
+        startTime,
+        endTime,
+      });
+      await tracer.flush();
+
+      return { ...result, traceId };
+    }
+
+    const result = await checkGuardrails({
+      question,
+      apiKey: this.env.OPENROUTER_API_KEY,
+      locale,
+    });
+
+    return { ...result, traceId };
+  }
+
+  private async askLLMStep(question: string, locale: string, traceId?: string) {
+    const tracer = createTracer(this.env);
+    let integrations: LangfuseTelemetryIntegration[] | undefined;
+
+    if (tracer && traceId) {
+      tracer.setTraceId(traceId);
+      const llmIntegration = new LangfuseTelemetryIntegration({
+        tracer,
+        agentName: "ask-llm",
+      });
+      integrations = [llmIntegration];
+    }
+
+    try {
+      return await askLLM({
+        question,
+        apiKey: this.env.OPENROUTER_API_KEY,
+        internalApi: this.env.INTERNAL_API,
+        internalApiUrl: this.env.INTERNAL_API_URL,
+        locale,
+        integrations,
+      });
+    } catch (error) {
+      await tracer?.flush();
+      throw error;
+    }
+  }
+
   override async run(
     event: WorkflowEvent<AskWorkflowParams>,
     step: WorkflowStep,
@@ -44,50 +117,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     const guardrails = await step.do(
       "check-guardrails",
       { retries: { limit: 0, delay: "1 second" } },
-      async () => {
-        const tracer = createTracer(this.env);
-        let traceId: string | undefined;
-
-        if (tracer) {
-          traceId = tracer.createTrace({
-            name: "ask-workflow",
-            input: { question, locale },
-          });
-
-          const guardrailIntegration = new LangfuseTelemetryIntegration({
-            tracer,
-            skipAgentSpan: true,
-          });
-
-          const startTime = new Date().toISOString();
-          const result = await checkGuardrails({
-            question,
-            apiKey: this.env.OPENROUTER_API_KEY,
-            locale,
-            integrations: [guardrailIntegration],
-          });
-          const endTime = new Date().toISOString();
-
-          tracer.createGuardrail({
-            name: "check-guardrails",
-            input: question,
-            output: result,
-            startTime,
-            endTime,
-          });
-          await tracer.flush();
-
-          return { ...result, traceId };
-        }
-
-        const result = await checkGuardrails({
-          question,
-          apiKey: this.env.OPENROUTER_API_KEY,
-          locale,
-        });
-
-        return { ...result, traceId };
-      },
+      () => this.checkGuardrailsStep(question, locale),
     );
 
     if (!guardrails.relevant) {
@@ -108,33 +138,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       answer = await step.do(
         "ask-llm",
         { retries: { limit: 1, delay: "5 seconds" } },
-        async () => {
-          const tracer = createTracer(this.env);
-          let integrations: LangfuseTelemetryIntegration[] | undefined;
-
-          if (tracer && guardrails.traceId) {
-            tracer.setTraceId(guardrails.traceId);
-            const llmIntegration = new LangfuseTelemetryIntegration({
-              tracer,
-              agentName: "ask-llm",
-            });
-            integrations = [llmIntegration];
-          }
-
-          try {
-            return await askLLM({
-              question,
-              apiKey: this.env.OPENROUTER_API_KEY,
-              internalApi: this.env.INTERNAL_API,
-              internalApiUrl: this.env.INTERNAL_API_URL,
-              locale,
-              integrations,
-            });
-          } catch (error) {
-            await tracer?.flush();
-            throw error;
-          }
-        },
+        () => this.askLLMStep(question, locale, guardrails.traceId),
       );
     } catch (error) {
       await step.do(
