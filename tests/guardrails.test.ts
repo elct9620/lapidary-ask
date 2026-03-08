@@ -74,6 +74,41 @@ describe("checkGuardrails", () => {
     expect(result).toEqual({ relevant: true, reason: "" });
   });
 
+  it("includes language instruction in system prompt when locale is provided", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { relevant: false, reason: "..." },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "How do I cook pasta?",
+      apiKey: "test-key",
+      locale: "ja",
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("Japanese"),
+      }),
+    );
+  });
+
+  it("uses default locale zh-TW when locale is not provided", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "Who maintains String?",
+      apiKey: "test-key",
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("Traditional Chinese (Taiwan)"),
+      }),
+    );
+  });
+
   it("passes correct parameters to generateText", async () => {
     mockedGenerateText.mockResolvedValue({
       output: { relevant: true, reason: "" },

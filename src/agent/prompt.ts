@@ -4,7 +4,7 @@ const LOCALE_LANGUAGE_MAP: Record<string, string> = {
   ja: "Japanese",
 };
 
-function getLanguageName(locale: string): string {
+export function getLanguageName(locale: string): string {
   if (locale in LOCALE_LANGUAGE_MAP) {
     return LOCALE_LANGUAGE_MAP[locale]!;
   }

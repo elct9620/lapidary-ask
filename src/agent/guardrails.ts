@@ -1,10 +1,12 @@
 import { generateText, Output } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
+import { getLanguageName } from "./prompt";
 
 export interface CheckGuardrailsOptions {
   question: string;
   apiKey: string;
+  locale?: string;
 }
 
 export interface GuardrailsResult {
@@ -19,7 +21,10 @@ const guardrailsSchema = z.object({
   reason: z.string(),
 });
 
-const GUARDRAILS_SYSTEM_PROMPT = `You are a relevance classifier for the Lapidary Knowledge Graph assistant.
+function buildGuardrailsSystemPrompt(locale: string): string {
+  const language = getLanguageName(locale);
+
+  return `You are a relevance classifier for the Lapidary Knowledge Graph assistant.
 
 The Lapidary Knowledge Graph contains information about:
 - **Rubyists**: Ruby community members identified by their bugs.ruby-lang.org usernames.
@@ -41,19 +46,22 @@ A question is **irrelevant** if it is about:
 
 Respond with:
 - \`relevant: true\` and an empty \`reason\` if the question is relevant.
-- \`relevant: false\` and a brief \`reason\` explaining why it is not relevant.`;
+- \`relevant: false\` and a brief \`reason\` explaining why it is not relevant.
+
+Always respond the reason in **${language}**.`;
+}
 
 export async function checkGuardrails(
   options: CheckGuardrailsOptions,
 ): Promise<GuardrailsResult> {
   try {
-    const { question, apiKey } = options;
+    const { question, apiKey, locale = "zh-TW" } = options;
     const openrouter = createOpenRouter({ apiKey });
 
     const { output } = await generateText({
       model: openrouter("openrouter/free"),
       output: Output.object({ schema: guardrailsSchema }),
-      system: GUARDRAILS_SYSTEM_PROMPT,
+      system: buildGuardrailsSystemPrompt(locale),
       prompt: question,
     });
 

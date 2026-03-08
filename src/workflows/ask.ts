@@ -28,6 +28,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         return await checkGuardrails({
           question,
           apiKey: this.env.OPENROUTER_API_KEY,
+          locale,
         });
       },
     );
