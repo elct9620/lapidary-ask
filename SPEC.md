@@ -17,6 +17,7 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 - A Discord slash command (`/ask`) that accepts natural language questions
 - An LLM-powered assistant that interprets questions and queries the Lapidary Knowledge Graph
 - A read-only interface to Lapidary's (Rubyist, Relationship, Module) knowledge graph
+- LLM call observability via Langfuse, tracking token usage, tool calls, and latency
 
 ### IS NOT
 
@@ -25,6 +26,7 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 - A multi-turn conversation system (each `/ask` is stateless)
 - A direct database query tool (users never write queries)
 - A source of information about arbitrary Ruby gems or third-party libraries (only Ruby core modules and standard libraries are tracked)
+- A real-time monitoring or alerting system (telemetry is for post-hoc analysis)
 
 ## User Journeys
 
@@ -56,8 +58,8 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 2. Verify signature, defer response, start `AskWorkflow`
 3. `AskWorkflow.run()` calls Guardrails to check input relevance
 4. If irrelevant → reply with Guardrails rejection reason, end workflow
-5. If relevant → call `askLLM()` with tools (max 15 steps)
-6. Format response and patch back to Discord
+5. If relevant → call `askLLM()` with tools (max 15 steps); TelemetryIntegration collects events during execution
+6. Format response and patch back to Discord (telemetry batch sent to Langfuse within the LLM step)
 
 ### Guardrails
 
@@ -80,15 +82,45 @@ Before invoking the main LLM, the Workflow runs a lightweight Guardrails check t
 
 The system uses OpenRouter to access free-tier LLM models via the Vercel AI SDK (`ai` package).
 
-| Property               | Value                                     |
-| ---------------------- | ----------------------------------------- |
-| Provider               | OpenRouter                                |
-| Model                  | `openrouter/free`                         |
-| System prompt language | English                                   |
-| Tool calling           | Enabled, up to 15 steps                   |
-| Response language      | Matches user question language by default |
+| Property               | Value                                |
+| ---------------------- | ------------------------------------ |
+| Provider               | OpenRouter                           |
+| Model                  | `openrouter/free`                    |
+| System prompt language | English                              |
+| Tool calling           | Enabled, up to 15 steps              |
+| Response language      | Matches the user's question language |
 
 The LLM receives the user's question and a set of tools for querying the Lapidary Knowledge Graph. It decides autonomously which tools to invoke (if any) and synthesizes results into a human-readable answer.
+
+### Observability
+
+The system uses AI SDK `TelemetryIntegration` lifecycle hooks to collect LLM telemetry events, then sends them to Langfuse via its REST API batch ingestion endpoint (`POST /api/public/ingestion`).
+
+#### Data Collection
+
+| Langfuse Entity | Granularity               | Data Captured                                    |
+| --------------- | ------------------------- | ------------------------------------------------ |
+| Trace           | One per `/ask` invocation | Question input, final response, locale, duration |
+| Generation      | One per LLM call (step)   | Model, prompt/completion tokens, latency         |
+| Span            | One per tool call         | Tool name, arguments, result, duration           |
+
+#### Lifecycle Mapping
+
+| AI SDK Event       | Langfuse Event      |
+| ------------------ | ------------------- |
+| `onStart`          | `trace-create`      |
+| `onStepStart`      | `generation-create` |
+| `onToolCallStart`  | `span-create`       |
+| `onToolCallFinish` | `span-update`       |
+| `onStepFinish`     | `generation-update` |
+| `onFinish`         | Batch POST to API   |
+
+#### Design Constraints
+
+- Telemetry failure does not affect the main response flow (fire-and-forget)
+- Telemetry is disabled when Langfuse credentials are not configured (no error raised)
+- Telemetry batch is sent within the Workflow step that calls `askLLM()`, before the step returns
+- Inputs and outputs are recorded by default; controllable via `recordInputs` / `recordOutputs` settings
 
 ### Lapidary Knowledge Graph Integration
 
@@ -142,15 +174,17 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | LLM returns empty response               | Reply: "No response."                                                               |
 | Discord response post failure            | Workflow retries the response step up to 2 times before giving up                   |
 | Workflow failure (all retries exhausted) | Reply: "LLM processing failed. Please try again later."                             |
+| Langfuse API failure                     | Silently ignored; does not affect user response                                     |
 | Discord interaction timeout (>15 min)    | Response is silently dropped by Discord; no retry                                   |
 
 ## System Boundaries
 
-| Boundary           | Protocol                                            | Auth                           |
-| ------------------ | --------------------------------------------------- | ------------------------------ |
-| Discord → Bot      | HTTPS webhook, signature verification               | Discord public key             |
-| Bot → OpenRouter   | HTTPS REST API                                      | API key (`OPENROUTER_API_KEY`) |
-| Bot → Lapidary API | Cloudflare VPC Binding (`env.INTERNAL_API.fetch()`) | None (network-level isolation) |
+| Boundary           | Protocol                                            | Auth                                 |
+| ------------------ | --------------------------------------------------- | ------------------------------------ |
+| Discord → Bot      | HTTPS webhook, signature verification               | Discord public key                   |
+| Bot → OpenRouter   | HTTPS REST API                                      | API key (`OPENROUTER_API_KEY`)       |
+| Bot → Lapidary API | Cloudflare VPC Binding (`env.INTERNAL_API.fetch()`) | None (network-level isolation)       |
+| Bot → Langfuse     | HTTPS REST API                                      | Basic Auth (public key + secret key) |
 
 ### Environment Bindings
 
@@ -162,21 +196,28 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication                                                                   |
 | `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API access                                                             |
 | `INTERNAL_API_URL`       | Secret          | Base URL for Lapidary API requests (configured via Cloudflare dashboard, not in wrangler.jsonc) |
+| `LANGFUSE_PUBLIC_KEY`    | Secret          | Langfuse API authentication (public key)                                                        |
+| `LANGFUSE_SECRET_KEY`    | Secret          | Langfuse API authentication (secret key)                                                        |
+| `LANGFUSE_BASE_URL`      | Variable        | Langfuse API base URL (default: `https://cloud.langfuse.com`)                                   |
 | `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow for async LLM processing                                                    |
 
 ## Terminology
 
-| Term            | Definition                                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Lapidary        | A knowledge graph builder that maps relationships between Ruby contributors and core modules from bugs.ruby-lang.org |
-| Knowledge Graph | The structured data store of (Rubyist, Relationship, Module) triplets extracted from Ruby issue tracker discussions  |
-| Rubyist         | A person who participates in Ruby core development, identified by their bugs.ruby-lang.org username                  |
-| CoreModule      | A built-in Ruby module (e.g., String, Array, IO) that is always available without `require`                          |
-| Stdlib          | A standard library shipped with Ruby that requires explicit `require` (e.g., json, net/http)                         |
-| Node ID         | Identifier in `type://name` format (e.g., `Rubyist://matz`, `CoreModule://String`)                                   |
-| VPC Binding     | Cloudflare's mechanism for private service-to-service communication                                                  |
-| OpenRouter      | An LLM gateway that provides access to multiple AI models through a unified API                                      |
-| Tool Calling    | The AI SDK pattern where the LLM invokes predefined functions to retrieve external data                              |
+| Term                 | Definition                                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Lapidary             | A knowledge graph builder that maps relationships between Ruby contributors and core modules from bugs.ruby-lang.org |
+| Knowledge Graph      | The structured data store of (Rubyist, Relationship, Module) triplets extracted from Ruby issue tracker discussions  |
+| Rubyist              | A person who participates in Ruby core development, identified by their bugs.ruby-lang.org username                  |
+| CoreModule           | A built-in Ruby module (e.g., String, Array, IO) that is always available without `require`                          |
+| Stdlib               | A standard library shipped with Ruby that requires explicit `require` (e.g., json, net/http)                         |
+| Node ID              | Identifier in `type://name` format (e.g., `Rubyist://matz`, `CoreModule://String`)                                   |
+| VPC Binding          | Cloudflare's mechanism for private service-to-service communication                                                  |
+| OpenRouter           | An LLM gateway that provides access to multiple AI models through a unified API                                      |
+| Tool Calling         | The AI SDK pattern where the LLM invokes predefined functions to retrieve external data                              |
+| Langfuse             | An open-source LLM observability platform for tracing, evaluating, and debugging AI applications                     |
+| TelemetryIntegration | AI SDK v6 lifecycle hook interface for collecting telemetry events without OTel dependencies                         |
+| Trace                | A Langfuse entity representing one end-to-end `/ask` invocation                                                      |
+| Generation           | A Langfuse entity representing a single LLM call within a trace, including token usage and latency                   |
 
 ## Runtime
 
@@ -187,3 +228,4 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | Framework     | Hono                         |
 | Language      | TypeScript                   |
 | AI SDK        | Vercel AI SDK (`ai` package) |
+| Observability | Langfuse                     |
