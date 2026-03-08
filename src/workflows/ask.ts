@@ -3,7 +3,7 @@ import {
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers";
-import { askLLM } from "../agent";
+import { askLLM, checkGuardrails } from "../agent";
 import { patchDiscordResponse } from "../discord/api";
 import { formatForDiscord } from "../format";
 
@@ -20,6 +20,30 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     step: WorkflowStep,
   ) {
     const { question, interactionToken, applicationId, locale } = event.payload;
+
+    const guardrails = await step.do(
+      "check-guardrails",
+      { retries: { limit: 0, delay: "1 second" } },
+      async () => {
+        return await checkGuardrails({
+          question,
+          apiKey: this.env.OPENROUTER_API_KEY,
+        });
+      },
+    );
+
+    if (!guardrails.relevant) {
+      await step.do(
+        "post-guardrails-rejection",
+        { retries: { limit: 2, delay: "2 seconds" } },
+        async () => {
+          await patchDiscordResponse(applicationId, interactionToken, {
+            content: guardrails.reason,
+          });
+        },
+      );
+      return;
+    }
 
     let answer: string;
     try {
