@@ -250,8 +250,12 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       body: {
         id: generationId,
         traceId: this.traceId,
+        model: event.response?.modelId,
         output,
         endTime: new Date().toISOString(),
+        ...(event.providerMetadata?.openrouter && {
+          metadata: { openrouter: event.providerMetadata.openrouter },
+        }),
         usage: {
           input: event.usage?.inputTokens,
           output: event.usage?.outputTokens,

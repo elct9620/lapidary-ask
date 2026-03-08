@@ -70,6 +70,7 @@ describe("LangfuseTelemetryIntegration", () => {
       stepNumber: 0,
       usage: { inputTokens: 50, outputTokens: 25 },
       text: "response",
+      response: { modelId: "google/gemma-3-27b-it:free" },
       ...overrides.stepFinish,
     } as any);
 
@@ -435,5 +436,40 @@ describe("LangfuseTelemetryIntegration", () => {
     expect(toolEvents).toHaveLength(2);
     expect(toolEvents[0].body.input).toEqual({ query: "Ruby" });
     expect(toolEvents[1].body.input).toEqual({ query: "Rails" });
+  });
+
+  it("generation-update includes response modelId and openrouter metadata", async () => {
+    await runLifecycle(integration, {
+      stepFinish: {
+        response: { modelId: "google/gemma-3-27b-it:free" },
+        providerMetadata: {
+          openrouter: {
+            provider: "google",
+            usage: { cost: 0 },
+          },
+        },
+      },
+    });
+
+    const generationUpdate = findEvent("generation-update");
+    expect(generationUpdate.body.model).toBe("google/gemma-3-27b-it:free");
+    expect(generationUpdate.body.metadata).toEqual({
+      openrouter: {
+        provider: "google",
+        usage: { cost: 0 },
+      },
+    });
+  });
+
+  it("generation-update omits metadata when no providerMetadata", async () => {
+    await runLifecycle(integration, {
+      stepFinish: {
+        response: { modelId: "google/gemma-3-27b-it:free" },
+      },
+    });
+
+    const generationUpdate = findEvent("generation-update");
+    expect(generationUpdate.body.model).toBe("google/gemma-3-27b-it:free");
+    expect(generationUpdate.body.metadata).toBeUndefined();
   });
 });
