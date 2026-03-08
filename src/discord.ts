@@ -1,9 +1,12 @@
-import { InteractionType } from "discord-api-types/v10";
+import {
+  InteractionType,
+  InteractionResponseType,
+} from "discord-api-types/v10";
 import { verifyKey } from "discord-interactions";
 import { patchDiscordResponse } from "./discord/api";
 import { getStringOption } from "./discord/helpers";
 
-interface DiscordInteraction {
+export interface DiscordInteraction {
   type: number;
   id: string;
   token: string;
@@ -57,12 +60,14 @@ export async function handleDiscordWebhook(
   }
 
   if (interaction.type === InteractionType.Ping) {
-    return Response.json({ type: 1 }); // PONG
+    return Response.json({ type: InteractionResponseType.Pong });
   }
 
   if (interaction.type === InteractionType.ApplicationCommand) {
     ctx.waitUntil(handleApplicationCommand(interaction, env));
-    return Response.json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
+    return Response.json({
+      type: InteractionResponseType.DeferredChannelMessageWithSource,
+    });
   }
 
   return new Response("Unknown interaction type", { status: 400 });

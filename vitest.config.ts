@@ -15,6 +15,7 @@ export default defineWorkersConfig({
       provider: "istanbul",
       reportsDirectory: "coverage",
       include: ["src/**/*.ts"],
+      exclude: ["src/commands.ts"],
     },
     poolOptions: {
       workers: {
