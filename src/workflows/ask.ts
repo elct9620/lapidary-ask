@@ -116,14 +116,14 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
 
     const guardrails = await step.do(
       "check-guardrails",
-      { retries: { limit: 0, delay: "1 second" } },
+      { timeout: "1 minute", retries: { limit: 0, delay: "1 second" } },
       () => this.checkGuardrailsStep(question, locale),
     );
 
     if (!guardrails.relevant) {
       await step.do(
         "post-guardrails-rejection",
-        { retries: { limit: 2, delay: "2 seconds" } },
+        { timeout: "30 seconds", retries: { limit: 2, delay: "2 seconds" } },
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
             content: guardrails.reason,
@@ -137,13 +137,13 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     try {
       answer = await step.do(
         "ask-llm",
-        { retries: { limit: 1, delay: "5 seconds" } },
+        { timeout: "5 minutes", retries: { limit: 1, delay: "5 seconds" } },
         () => this.askLLMStep(question, locale, guardrails.traceId),
       );
     } catch (error) {
       await step.do(
         "report-llm-error",
-        { retries: { limit: 0, delay: "1 second" } },
+        { timeout: "30 seconds", retries: { limit: 0, delay: "1 second" } },
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
             content: "LLM processing failed. Please try again later.",
@@ -156,7 +156,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     try {
       await step.do(
         "post-response",
-        { retries: { limit: 2, delay: "2 seconds" } },
+        { timeout: "30 seconds", retries: { limit: 2, delay: "2 seconds" } },
         async () => {
           const content = formatForDiscord(answer);
           await patchDiscordResponse(applicationId, interactionToken, {
@@ -167,7 +167,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     } catch (error) {
       await step.do(
         "report-post-error",
-        { retries: { limit: 0, delay: "1 second" } },
+        { timeout: "30 seconds", retries: { limit: 0, delay: "1 second" } },
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
             content: "Failed to post response. Please try again later.",
