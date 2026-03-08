@@ -62,13 +62,6 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     if (config.traceId) {
       this.traceId = config.traceId;
     }
-
-    this.onStart = this.onStart.bind(this);
-    this.onStepStart = this.onStepStart.bind(this);
-    this.onToolCallStart = this.onToolCallStart.bind(this);
-    this.onToolCallFinish = this.onToolCallFinish.bind(this);
-    this.onStepFinish = this.onStepFinish.bind(this);
-    this.onFinish = this.onFinish.bind(this);
   }
 
   createTrace({
@@ -138,7 +131,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     this.events = [];
   }
 
-  async onStart(event: OnStartEvent<ToolSet>): Promise<void> {
+  onStart = async (event: OnStartEvent<ToolSet>): Promise<void> => {
     if (!this.traceId) {
       this.traceId = crypto.randomUUID();
       this.events.push({
@@ -170,9 +163,9 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         startTime: new Date().toISOString(),
       },
     });
-  }
+  };
 
-  async onStepStart(event: OnStepStartEvent<ToolSet>): Promise<void> {
+  onStepStart = async (event: OnStepStartEvent<ToolSet>): Promise<void> => {
     const generationId = crypto.randomUUID();
     const stepNumber = event.stepNumber ?? 0;
     this.generationIds.set(stepNumber, generationId);
@@ -196,9 +189,11 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         ],
       },
     });
-  }
+  };
 
-  async onToolCallStart(event: OnToolCallStartEvent<ToolSet>): Promise<void> {
+  onToolCallStart = async (
+    event: OnToolCallStartEvent<ToolSet>,
+  ): Promise<void> => {
     const toolCallId = event.toolCall.toolCallId;
 
     this.pendingToolCalls.set(toolCallId, {
@@ -206,9 +201,11 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       startTime: new Date().toISOString(),
       input: event.toolCall.input,
     });
-  }
+  };
 
-  async onToolCallFinish(event: OnToolCallFinishEvent<ToolSet>): Promise<void> {
+  onToolCallFinish = async (
+    event: OnToolCallFinishEvent<ToolSet>,
+  ): Promise<void> => {
     const stepNumber = event.stepNumber ?? 0;
     const toolCallId = event.toolCall.toolCallId;
     const pending = this.pendingToolCalls.get(toolCallId);
@@ -235,9 +232,9 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     });
 
     this.pendingToolCalls.delete(toolCallId);
-  }
+  };
 
-  async onStepFinish(event: OnStepFinishEvent<ToolSet>): Promise<void> {
+  onStepFinish = async (event: OnStepFinishEvent<ToolSet>): Promise<void> => {
     const stepNumber = event.stepNumber ?? 0;
     const generationId = this.generationIds.get(stepNumber);
 
@@ -263,9 +260,9 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         },
       },
     });
-  }
+  };
 
-  async onFinish(event: OnFinishEvent<ToolSet>): Promise<void> {
+  onFinish = async (event: OnFinishEvent<ToolSet>): Promise<void> => {
     if (this.agentId) {
       this.events.push({
         id: crypto.randomUUID(),
@@ -281,5 +278,5 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     }
 
     await this.flush();
-  }
+  };
 }
