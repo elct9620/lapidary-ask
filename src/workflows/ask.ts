@@ -14,24 +14,6 @@ export interface AskWorkflowParams {
   locale: string;
 }
 
-async function reportError(
-  step: WorkflowStep,
-  stepName: string,
-  applicationId: string,
-  interactionToken: string,
-  message: string,
-): Promise<void> {
-  await step.do(
-    stepName,
-    { retries: { limit: 0, delay: "1 second" } },
-    async () => {
-      await patchDiscordResponse(applicationId, interactionToken, {
-        content: message,
-      });
-    },
-  );
-}
-
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   override async run(
     event: WorkflowEvent<AskWorkflowParams>,
@@ -55,12 +37,14 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         },
       );
     } catch (error) {
-      await reportError(
-        step,
+      await step.do(
         "report-llm-error",
-        applicationId,
-        interactionToken,
-        "LLM processing failed. Please try again later.",
+        { retries: { limit: 0, delay: "1 second" } },
+        async () => {
+          await patchDiscordResponse(applicationId, interactionToken, {
+            content: "LLM processing failed. Please try again later.",
+          });
+        },
       );
       return;
     }
@@ -77,12 +61,14 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         },
       );
     } catch (error) {
-      await reportError(
-        step,
+      await step.do(
         "report-post-error",
-        applicationId,
-        interactionToken,
-        "Failed to post response. Please try again later.",
+        { retries: { limit: 0, delay: "1 second" } },
+        async () => {
+          await patchDiscordResponse(applicationId, interactionToken, {
+            content: "Failed to post response. Please try again later.",
+          });
+        },
       );
     }
   }
