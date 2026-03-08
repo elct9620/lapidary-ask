@@ -6,6 +6,7 @@ import {
 import { askLLM, checkGuardrails } from "../agent";
 import { patchDiscordResponse } from "../discord/api";
 import { formatForDiscord } from "../format";
+import { LangfuseTelemetryIntegration } from "../telemetry/langfuse";
 
 export interface AskWorkflowParams {
   question: string;
@@ -52,12 +53,24 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "ask-llm",
         { retries: { limit: 1, delay: "5 seconds" } },
         async () => {
+          const integrations =
+            this.env.LANGFUSE_PUBLIC_KEY && this.env.LANGFUSE_SECRET_KEY
+              ? [
+                  new LangfuseTelemetryIntegration({
+                    publicKey: this.env.LANGFUSE_PUBLIC_KEY,
+                    secretKey: this.env.LANGFUSE_SECRET_KEY,
+                    baseUrl: this.env.LANGFUSE_BASE_URL,
+                  }),
+                ]
+              : undefined;
+
           return await askLLM({
             question,
             apiKey: this.env.OPENROUTER_API_KEY,
             internalApi: this.env.INTERNAL_API,
             internalApiUrl: this.env.INTERNAL_API_URL,
             locale,
+            integrations,
           });
         },
       );

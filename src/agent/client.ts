@@ -1,4 +1,4 @@
-import { generateText, stepCountIs } from "ai";
+import { generateText, stepCountIs, type TelemetryIntegration } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt } from "./prompt";
 import { createTools } from "./tools";
@@ -9,6 +9,7 @@ export interface AskLLMOptions {
   internalApi: Fetcher;
   internalApiUrl: string;
   locale?: string;
+  integrations?: TelemetryIntegration[];
 }
 
 export async function askLLM(options: AskLLMOptions): Promise<string> {
@@ -18,6 +19,7 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
     internalApi,
     internalApiUrl,
     locale = "zh-TW",
+    integrations,
   } = options;
   const openrouter = createOpenRouter({ apiKey });
   const tools = createTools(internalApi, internalApiUrl);
@@ -27,6 +29,9 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
     prompt: question,
     tools,
     stopWhen: stepCountIs(15),
+    ...(integrations && {
+      experimental_telemetry: { isEnabled: true, integrations },
+    }),
   });
   return text || "No response.";
 }

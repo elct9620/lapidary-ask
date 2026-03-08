@@ -77,6 +77,47 @@ describe("askLLM", () => {
     );
   });
 
+  it("passes experimental_telemetry when integrations provided", async () => {
+    mockedGenerateText.mockResolvedValue({
+      text: "response",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    const mockIntegration = { onStart: vi.fn() };
+
+    await askLLM({
+      question: "test question",
+      apiKey: "test-key",
+      internalApi: mockFetcher,
+      internalApiUrl: "http://api.test",
+      integrations: [mockIntegration],
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experimental_telemetry: {
+          isEnabled: true,
+          integrations: [mockIntegration],
+        },
+      }),
+    );
+  });
+
+  it("does not pass experimental_telemetry when no integrations", async () => {
+    mockedGenerateText.mockResolvedValue({
+      text: "response",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await askLLM({
+      question: "test question",
+      apiKey: "test-key",
+      internalApi: mockFetcher,
+      internalApiUrl: "http://api.test",
+    });
+
+    const call = mockedGenerateText.mock.calls[0][0];
+    expect(call).not.toHaveProperty("experimental_telemetry");
+  });
+
   it("passes locale to buildSystemPrompt", async () => {
     mockedGenerateText.mockResolvedValue({
       text: "response",
