@@ -185,30 +185,27 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         model: event.model?.modelId,
         startTime: new Date().toISOString(),
         input: {
-          system: (event as any).system,
-          messages: (event as any).messages,
+          system: event.system,
+          messages: event.messages,
         },
       },
     });
   }
 
   async onToolCallStart(event: OnToolCallStartEvent<ToolSet>): Promise<void> {
-    const stepNumber = event.stepNumber ?? 0;
-    const toolName = event.toolCall?.toolName ?? "unknown";
-    const toolCallId = crypto.randomUUID();
+    const toolCallId = event.toolCall.toolCallId;
 
-    this.pendingToolCalls.set(`${stepNumber}:${toolName}`, {
-      id: toolCallId,
+    this.pendingToolCalls.set(toolCallId, {
+      id: crypto.randomUUID(),
       startTime: new Date().toISOString(),
-      input: event.toolCall?.input,
+      input: event.toolCall.input,
     });
   }
 
   async onToolCallFinish(event: OnToolCallFinishEvent<ToolSet>): Promise<void> {
     const stepNumber = event.stepNumber ?? 0;
-    const toolName = event.toolCall?.toolName ?? "unknown";
-    const key = `${stepNumber}:${toolName}`;
-    const pending = this.pendingToolCalls.get(key);
+    const toolCallId = event.toolCall.toolCallId;
+    const pending = this.pendingToolCalls.get(toolCallId);
     const parentGenerationId = this.generationIds.get(stepNumber);
 
     this.events.push({
@@ -219,7 +216,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         id: pending?.id ?? crypto.randomUUID(),
         traceId: this.traceId,
         parentObservationId: parentGenerationId,
-        name: toolName,
+        name: event.toolCall.toolName,
         input: pending?.input,
         output: event.success ? event.output : { error: event.error },
         startTime: pending?.startTime,
@@ -231,7 +228,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       },
     });
 
-    this.pendingToolCalls.delete(key);
+    this.pendingToolCalls.delete(toolCallId);
   }
 
   async onStepFinish(event: OnStepFinishEvent<ToolSet>): Promise<void> {
@@ -239,8 +236,8 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     const generationId = this.generationIds.get(stepNumber);
 
     const output: Record<string, unknown> = { text: event.text };
-    if ((event as any).reasoning) {
-      output.reasoning = (event as any).reasoning;
+    if (event.reasoningText) {
+      output.reasoning = event.reasoningText;
     }
 
     this.events.push({
@@ -255,14 +252,14 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         usage: {
           input: event.usage?.inputTokens,
           output: event.usage?.outputTokens,
-          total: (event.usage as any)?.totalTokens,
+          total: event.usage.totalTokens,
           unit: "TOKENS",
         },
       },
     });
   }
 
-  async onFinish(_event: OnFinishEvent<ToolSet>): Promise<void> {
+  async onFinish(event: OnFinishEvent<ToolSet>): Promise<void> {
     if (this.agentId) {
       this.events.push({
         id: crypto.randomUUID(),
@@ -272,7 +269,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
           id: this.agentId,
           traceId: this.traceId,
           endTime: new Date().toISOString(),
-          output: _event.text,
+          output: event.text,
         },
       });
     }

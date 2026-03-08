@@ -19,51 +19,88 @@ describe("LangfuseTelemetryIntegration", () => {
     });
   });
 
+  async function runLifecycle(
+    inst: LangfuseTelemetryIntegration,
+    overrides: {
+      stepFinish?: Record<string, unknown>;
+      finish?: Record<string, unknown>;
+      withToolCall?: boolean;
+    } = {},
+  ) {
+    await inst.onStart!({
+      model: { provider: "openrouter", modelId: "openrouter/free" },
+      prompt: "test",
+    } as any);
+
+    await inst.onStepStart!({
+      stepNumber: 0,
+      model: { provider: "openrouter", modelId: "openrouter/free" },
+      ...(overrides.stepFinish?.system !== undefined && {
+        system: overrides.stepFinish.system,
+      }),
+      ...(overrides.stepFinish?.messages !== undefined && {
+        messages: overrides.stepFinish.messages,
+      }),
+    } as any);
+
+    if (overrides.withToolCall) {
+      await inst.onToolCallStart!({
+        stepNumber: 0,
+        toolCall: {
+          toolCallId: "tc-1",
+          toolName: "searchNodes",
+          input: { query: "Ruby" },
+        },
+      } as any);
+
+      await inst.onToolCallFinish!({
+        stepNumber: 0,
+        toolCall: {
+          toolCallId: "tc-1",
+          toolName: "searchNodes",
+          input: { query: "Ruby" },
+        },
+        success: true,
+        output: [{ name: "Ruby" }],
+        durationMs: 100,
+      } as any);
+    }
+
+    await inst.onStepFinish!({
+      stepNumber: 0,
+      usage: { inputTokens: 50, outputTokens: 25 },
+      text: "response",
+      ...overrides.stepFinish,
+    } as any);
+
+    await inst.onFinish!({
+      text: "response",
+      totalUsage: { inputTokens: 50, outputTokens: 25 },
+      ...overrides.finish,
+    } as any);
+  }
+
+  function parseBatch(): any[] {
+    return JSON.parse(fetchSpy.mock.calls[0][1].body).batch;
+  }
+
+  function findEvent(type: string): any {
+    return parseBatch().find((e: any) => e.type === type);
+  }
+
   it("collects events through lifecycle hooks and batches them", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "What is Ruby?",
-    } as any);
-
-    await integration.onStepStart!({
-      stepNumber: 0,
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-    } as any);
-
-    await integration.onToolCallStart!({
-      stepNumber: 0,
-      toolCall: { toolName: "searchNodes", args: { query: "Ruby" } },
-    } as any);
-
-    await integration.onToolCallFinish!({
-      stepNumber: 0,
-      toolCall: { toolName: "searchNodes", args: { query: "Ruby" } },
-      success: true,
-      output: [{ name: "Ruby" }],
-      durationMs: 150,
-    } as any);
-
-    await integration.onStepFinish!({
-      stepNumber: 0,
-      usage: { inputTokens: 100, outputTokens: 50 },
-      text: "Ruby is a language",
-    } as any);
-
-    await integration.onFinish!({
-      text: "Ruby is a language",
-      totalUsage: { inputTokens: 100, outputTokens: 50 },
-    } as any);
+    await runLifecycle(integration, { withToolCall: true });
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     const [url, options] = fetchSpy.mock.calls[0];
     expect(url).toBe("https://cloud.langfuse.com/api/public/ingestion");
     expect(options.method).toBe("POST");
 
-    const body = JSON.parse(options.body);
+    const batch = parseBatch();
     // trace-create, agent-create, generation-create, tool-create, generation-update, span-update (agent end)
-    expect(body.batch).toHaveLength(6);
+    expect(batch).toHaveLength(6);
 
-    const types = body.batch.map((e: any) => e.type);
+    const types = batch.map((e: any) => e.type);
     expect(types).toContain("trace-create");
     expect(types).toContain("agent-create");
     expect(types).toContain("generation-create");
@@ -73,15 +110,7 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("sends correct auth header", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
+    await runLifecycle(integration);
 
     const [, options] = fetchSpy.mock.calls[0];
     const expectedAuth = `Basic ${btoa("pk-test:sk-test")}`;
@@ -92,15 +121,7 @@ describe("LangfuseTelemetryIntegration", () => {
   it("silently handles fetch failures", async () => {
     fetchSpy.mockRejectedValue(new Error("Network error"));
 
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
+    await runLifecycle(integration);
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     // Should not throw
@@ -122,15 +143,7 @@ describe("LangfuseTelemetryIntegration", () => {
       baseUrl: "https://custom.langfuse.com",
     });
 
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
+    await runLifecycle(integration);
 
     const [url] = fetchSpy.mock.calls[0];
     expect(url).toBe("https://custom.langfuse.com/api/public/ingestion");
@@ -143,82 +156,29 @@ describe("LangfuseTelemetryIntegration", () => {
       environment: "production",
     });
 
-    await envIntegration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(envIntegration);
 
-    await envIntegration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const traceEvent = body.batch.find((e: any) => e.type === "trace-create");
-
+    const traceEvent = findEvent("trace-create");
     expect(traceEvent.body.environment).toBe("production");
   });
 
   it("omits environment when not provided", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration);
 
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const traceEvent = body.batch.find((e: any) => e.type === "trace-create");
-
+    const traceEvent = findEvent("trace-create");
     expect(traceEvent.body.environment).toBeUndefined();
   });
 
   it("creates correct parent-child relationships with agent", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration, { withToolCall: true });
 
-    await integration.onStepStart!({
-      stepNumber: 0,
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-    } as any);
-
-    await integration.onToolCallStart!({
-      stepNumber: 0,
-      toolCall: { toolName: "searchNodes", args: { query: "Ruby" } },
-    } as any);
-
-    await integration.onToolCallFinish!({
-      stepNumber: 0,
-      toolCall: { toolName: "searchNodes", args: { query: "Ruby" } },
-      success: true,
-      output: [],
-      durationMs: 100,
-    } as any);
-
-    await integration.onStepFinish!({
-      stepNumber: 0,
-      usage: { inputTokens: 50, outputTokens: 25 },
-      text: "response",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 50, outputTokens: 25 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-
-    const traceEvent = body.batch.find((e: any) => e.type === "trace-create");
-    const agentCreate = body.batch.find((e: any) => e.type === "agent-create");
-    const generationCreate = body.batch.find(
+    const batch = parseBatch();
+    const traceEvent = batch.find((e: any) => e.type === "trace-create");
+    const agentCreate = batch.find((e: any) => e.type === "agent-create");
+    const generationCreate = batch.find(
       (e: any) => e.type === "generation-create",
     );
-    const toolCreate = body.batch.find((e: any) => e.type === "tool-create");
+    const toolCreate = batch.find((e: any) => e.type === "tool-create");
 
     // Agent is under trace
     expect(agentCreate.body.traceId).toBe(traceEvent.body.id);
@@ -238,20 +198,10 @@ describe("LangfuseTelemetryIntegration", () => {
 
     expect(traceId).toBe("uuid-1");
 
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration);
 
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const traceEvents = body.batch.filter(
-      (e: any) => e.type === "trace-create",
-    );
+    const batch = parseBatch();
+    const traceEvents = batch.filter((e: any) => e.type === "trace-create");
 
     // Only one trace-create from createTrace(), not from onStart()
     expect(traceEvents).toHaveLength(1);
@@ -265,25 +215,15 @@ describe("LangfuseTelemetryIntegration", () => {
       traceId: "existing-trace-id",
     });
 
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration);
 
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 10, outputTokens: 5 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const traceEvents = body.batch.filter(
-      (e: any) => e.type === "trace-create",
-    );
+    const batch = parseBatch();
+    const traceEvents = batch.filter((e: any) => e.type === "trace-create");
 
     expect(traceEvents).toHaveLength(0);
 
     // Agent should reference the existing trace
-    const agentCreate = body.batch.find((e: any) => e.type === "agent-create");
+    const agentCreate = batch.find((e: any) => e.type === "agent-create");
     expect(agentCreate.body.traceId).toBe("existing-trace-id");
   });
 
@@ -303,8 +243,8 @@ describe("LangfuseTelemetryIntegration", () => {
 
     await integration.flush();
 
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const guardrailEvent = body.batch.find(
+    const batch = parseBatch();
+    const guardrailEvent = batch.find(
       (e: any) => e.type === "guardrail-create",
     );
 
@@ -335,34 +275,14 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("generation includes input with system and messages", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration, {
+      stepFinish: {
+        system: "You are a helpful assistant.",
+        messages: [{ role: "user", content: "Hello" }],
+      },
+    });
 
-    await integration.onStepStart!({
-      stepNumber: 0,
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      system: "You are a helpful assistant.",
-      messages: [{ role: "user", content: "Hello" }],
-    } as any);
-
-    await integration.onStepFinish!({
-      stepNumber: 0,
-      usage: { inputTokens: 50, outputTokens: 25 },
-      text: "response",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 50, outputTokens: 25 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const generationCreate = body.batch.find(
-      (e: any) => e.type === "generation-create",
-    );
-
+    const generationCreate = findEvent("generation-create");
     expect(generationCreate.body.input).toEqual({
       system: "You are a helpful assistant.",
       messages: [{ role: "user", content: "Hello" }],
@@ -370,33 +290,11 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("generation output includes reasoning when present", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration, {
+      stepFinish: { reasoningText: "I think this because..." },
+    });
 
-    await integration.onStepStart!({
-      stepNumber: 0,
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-    } as any);
-
-    await integration.onStepFinish!({
-      stepNumber: 0,
-      usage: { inputTokens: 50, outputTokens: 25 },
-      text: "response",
-      reasoning: "I think this because...",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 50, outputTokens: 25 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const generationUpdate = body.batch.find(
-      (e: any) => e.type === "generation-update",
-    );
-
+    const generationUpdate = findEvent("generation-update");
     expect(generationUpdate.body.output).toEqual({
       text: "response",
       reasoning: "I think this because...",
@@ -404,63 +302,21 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("generation output omits reasoning when absent", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration);
 
-    await integration.onStepStart!({
-      stepNumber: 0,
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-    } as any);
-
-    await integration.onStepFinish!({
-      stepNumber: 0,
-      usage: { inputTokens: 50, outputTokens: 25 },
-      text: "response",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 50, outputTokens: 25 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const generationUpdate = body.batch.find(
-      (e: any) => e.type === "generation-update",
-    );
-
+    const generationUpdate = findEvent("generation-update");
     expect(generationUpdate.body.output).toEqual({ text: "response" });
     expect(generationUpdate.body.output.reasoning).toBeUndefined();
   });
 
   it("usage includes total and unit TOKENS", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration, {
+      stepFinish: {
+        usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
+      },
+    });
 
-    await integration.onStepStart!({
-      stepNumber: 0,
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-    } as any);
-
-    await integration.onStepFinish!({
-      stepNumber: 0,
-      usage: { inputTokens: 50, outputTokens: 25, totalTokens: 75 },
-      text: "response",
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 50, outputTokens: 25 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const generationUpdate = body.batch.find(
-      (e: any) => e.type === "generation-update",
-    );
-
+    const generationUpdate = findEvent("generation-update");
     expect(generationUpdate.body.usage).toEqual({
       input: 50,
       output: 25,
@@ -470,44 +326,17 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("tool-create has complete data from start and finish", async () => {
-    await integration.onStart!({
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-      prompt: "test",
-    } as any);
+    await runLifecycle(integration, { withToolCall: true });
 
-    await integration.onStepStart!({
-      stepNumber: 0,
-      model: { provider: "openrouter", modelId: "openrouter/free" },
-    } as any);
+    const batch = parseBatch();
 
-    await integration.onToolCallStart!({
-      stepNumber: 0,
-      toolCall: { toolName: "searchNodes", input: { query: "Ruby" } },
-    } as any);
-
-    await integration.onToolCallFinish!({
-      stepNumber: 0,
-      toolCall: { toolName: "searchNodes", args: { query: "Ruby" } },
-      success: true,
-      output: [{ name: "Ruby" }],
-      durationMs: 100,
-    } as any);
-
-    await integration.onFinish!({
-      text: "response",
-      totalUsage: { inputTokens: 50, outputTokens: 25 },
-    } as any);
-
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-
-    // No span-create or span-update events
-    const spanEvents = body.batch.filter(
+    // No span-create events (span-update only for agent end)
+    const spanEvents = batch.filter(
       (e: any) => e.type === "span-create" || e.type === "span-update",
     );
-    // span-update only for agent end
     expect(spanEvents.every((e: any) => e.type === "span-update")).toBe(true);
 
-    const toolCreate = body.batch.find((e: any) => e.type === "tool-create");
+    const toolCreate = batch.find((e: any) => e.type === "tool-create");
     expect(toolCreate).toBeDefined();
     expect(toolCreate.body.name).toBe("searchNodes");
     expect(toolCreate.body.output).toEqual([{ name: "Ruby" }]);
@@ -520,6 +349,22 @@ describe("LangfuseTelemetryIntegration", () => {
   });
 
   it("agent span-update closes at onFinish", async () => {
+    await runLifecycle(integration, {
+      finish: { text: "final response" },
+    });
+
+    const batch = parseBatch();
+    const agentCreate = batch.find((e: any) => e.type === "agent-create");
+    const agentEnd = batch.find(
+      (e: any) => e.type === "span-update" && e.body.id === agentCreate.body.id,
+    );
+
+    expect(agentEnd).toBeDefined();
+    expect(agentEnd.body.output).toBe("final response");
+    expect(agentEnd.body.endTime).toBeDefined();
+  });
+
+  it("handles duplicate tool names in the same step via toolCallId", async () => {
     await integration.onStart!({
       model: { provider: "openrouter", modelId: "openrouter/free" },
       prompt: "test",
@@ -530,6 +375,49 @@ describe("LangfuseTelemetryIntegration", () => {
       model: { provider: "openrouter", modelId: "openrouter/free" },
     } as any);
 
+    // Two searchNodes calls in the same step
+    await integration.onToolCallStart!({
+      stepNumber: 0,
+      toolCall: {
+        toolCallId: "tc-1",
+        toolName: "searchNodes",
+        input: { query: "Ruby" },
+      },
+    } as any);
+
+    await integration.onToolCallFinish!({
+      stepNumber: 0,
+      toolCall: {
+        toolCallId: "tc-1",
+        toolName: "searchNodes",
+        input: { query: "Ruby" },
+      },
+      success: true,
+      output: [{ name: "Ruby" }],
+      durationMs: 100,
+    } as any);
+
+    await integration.onToolCallStart!({
+      stepNumber: 0,
+      toolCall: {
+        toolCallId: "tc-2",
+        toolName: "searchNodes",
+        input: { query: "Rails" },
+      },
+    } as any);
+
+    await integration.onToolCallFinish!({
+      stepNumber: 0,
+      toolCall: {
+        toolCallId: "tc-2",
+        toolName: "searchNodes",
+        input: { query: "Rails" },
+      },
+      success: true,
+      output: [{ name: "Rails" }],
+      durationMs: 80,
+    } as any);
+
     await integration.onStepFinish!({
       stepNumber: 0,
       usage: { inputTokens: 50, outputTokens: 25 },
@@ -537,18 +425,15 @@ describe("LangfuseTelemetryIntegration", () => {
     } as any);
 
     await integration.onFinish!({
-      text: "final response",
+      text: "response",
       totalUsage: { inputTokens: 50, outputTokens: 25 },
     } as any);
 
-    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-    const agentCreate = body.batch.find((e: any) => e.type === "agent-create");
-    const agentEnd = body.batch.find(
-      (e: any) => e.type === "span-update" && e.body.id === agentCreate.body.id,
-    );
+    const batch = parseBatch();
+    const toolEvents = batch.filter((e: any) => e.type === "tool-create");
 
-    expect(agentEnd).toBeDefined();
-    expect(agentEnd.body.output).toBe("final response");
-    expect(agentEnd.body.endTime).toBeDefined();
+    expect(toolEvents).toHaveLength(2);
+    expect(toolEvents[0].body.input).toEqual({ query: "Ruby" });
+    expect(toolEvents[1].body.input).toEqual({ query: "Rails" });
   });
 });
