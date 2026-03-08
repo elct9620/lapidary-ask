@@ -13,6 +13,7 @@ export interface LangfuseConfig {
   publicKey: string;
   secretKey: string;
   baseUrl?: string;
+  environment?: string;
 }
 
 interface LangfuseEvent {
@@ -26,6 +27,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
   private readonly publicKey: string;
   private readonly secretKey: string;
   private readonly baseUrl: string;
+  private readonly environment: string | undefined;
   private events: LangfuseEvent[] = [];
   private traceId: string | null = null;
   private generationIds: Map<number, string> = new Map();
@@ -35,6 +37,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     this.publicKey = config.publicKey;
     this.secretKey = config.secretKey;
     this.baseUrl = config.baseUrl ?? "https://cloud.langfuse.com";
+    this.environment = config.environment;
 
     this.onStart = this.onStart.bind(this);
     this.onStepStart = this.onStepStart.bind(this);
@@ -54,6 +57,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
         id: this.traceId,
         name: "ai-generate-text",
         input: event.prompt,
+        environment: this.environment,
         metadata: {
           model: event.model?.modelId,
           provider: event.model?.provider,

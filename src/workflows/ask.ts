@@ -60,6 +60,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
                     publicKey: this.env.LANGFUSE_PUBLIC_KEY,
                     secretKey: this.env.LANGFUSE_SECRET_KEY,
                     baseUrl: this.env.LANGFUSE_BASE_URL,
+                    environment: this.env.ENVIRONMENT,
                   }),
                 ]
               : undefined;

@@ -134,6 +134,46 @@ describe("LangfuseTelemetryIntegration", () => {
     expect(url).toBe("https://custom.langfuse.com/api/public/ingestion");
   });
 
+  it("includes environment in trace-create body", async () => {
+    const envIntegration = new LangfuseTelemetryIntegration({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+      environment: "production",
+    });
+
+    await envIntegration.onStart!({
+      model: { provider: "openrouter", modelId: "openrouter/free" },
+      prompt: "test",
+    } as any);
+
+    await envIntegration.onFinish!({
+      text: "response",
+      totalUsage: { inputTokens: 10, outputTokens: 5 },
+    } as any);
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const traceEvent = body.batch.find((e: any) => e.type === "trace-create");
+
+    expect(traceEvent.body.environment).toBe("production");
+  });
+
+  it("omits environment when not provided", async () => {
+    await integration.onStart!({
+      model: { provider: "openrouter", modelId: "openrouter/free" },
+      prompt: "test",
+    } as any);
+
+    await integration.onFinish!({
+      text: "response",
+      totalUsage: { inputTokens: 10, outputTokens: 5 },
+    } as any);
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const traceEvent = body.batch.find((e: any) => e.type === "trace-create");
+
+    expect(traceEvent.body.environment).toBeUndefined();
+  });
+
   it("creates correct parent-child relationships", async () => {
     await integration.onStart!({
       model: { provider: "openrouter", modelId: "openrouter/free" },

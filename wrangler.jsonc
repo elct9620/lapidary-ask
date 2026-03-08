@@ -4,9 +4,9 @@
   "main": "src/index.tsx",
   "compatibility_date": "2026-03-07",
   "compatibility_flags": ["nodejs_compat"],
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
+  "vars": {
+    "ENVIRONMENT": "production",
+  },
   // "kv_namespaces": [
   //   {
   //     "binding": "MY_KV_NAMESPACE",
