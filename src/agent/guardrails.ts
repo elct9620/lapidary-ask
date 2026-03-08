@@ -1,12 +1,15 @@
 import { generateText, Output } from "ai";
+import type { TelemetryIntegration } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { getLanguageName } from "./prompt";
+import type { Flushable } from "../telemetry/langfuse";
 
 export interface CheckGuardrailsOptions {
   question: string;
   apiKey: string;
   locale?: string;
+  integrations?: (TelemetryIntegration & Flushable)[];
 }
 
 export interface GuardrailsResult {
@@ -55,7 +58,7 @@ export async function checkGuardrails(
   options: CheckGuardrailsOptions,
 ): Promise<GuardrailsResult> {
   try {
-    const { question, apiKey, locale = "zh-TW" } = options;
+    const { question, apiKey, locale = "zh-TW", integrations } = options;
     const openrouter = createOpenRouter({ apiKey });
 
     const { output } = await generateText({
@@ -63,10 +66,16 @@ export async function checkGuardrails(
       output: Output.object({ schema: guardrailsSchema }),
       system: buildGuardrailsSystemPrompt(locale),
       prompt: question,
+      ...(integrations && {
+        experimental_telemetry: { isEnabled: true, integrations },
+      }),
     });
 
     return output ?? FAIL_OPEN;
   } catch {
+    if (options.integrations) {
+      await Promise.allSettled(options.integrations.map((i) => i.flush()));
+    }
     return FAIL_OPEN;
   }
 }

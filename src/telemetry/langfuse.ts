@@ -19,6 +19,7 @@ export interface LangfuseConfig {
   baseUrl?: string;
   environment?: string;
   traceId?: string;
+  agentName?: string;
 }
 
 interface LangfuseEvent {
@@ -48,6 +49,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
   private readonly secretKey: string;
   private readonly baseUrl: string;
   private readonly environment: string | undefined;
+  private readonly agentName: string;
   private events: LangfuseEvent[] = [];
   private traceId: string | null = null;
   private agentId: string | null = null;
@@ -59,6 +61,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     this.secretKey = config.secretKey;
     this.baseUrl = config.baseUrl ?? "https://cloud.langfuse.com";
     this.environment = config.environment;
+    this.agentName = config.agentName ?? "ask-llm";
     if (config.traceId) {
       this.traceId = config.traceId;
     }
@@ -159,7 +162,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       body: {
         id: this.agentId,
         traceId: this.traceId,
-        name: "ask-llm",
+        name: this.agentName,
         startTime: new Date().toISOString(),
       },
     });

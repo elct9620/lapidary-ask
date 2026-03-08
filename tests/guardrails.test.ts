@@ -128,4 +128,59 @@ describe("checkGuardrails", () => {
       }),
     );
   });
+
+  it("passes integrations to generateText when provided", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    const mockIntegration = { flush: vi.fn().mockResolvedValue(undefined) };
+
+    await checkGuardrails({
+      question: "Who maintains String?",
+      apiKey: "test-key",
+      integrations: [mockIntegration as any],
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experimental_telemetry: {
+          isEnabled: true,
+          integrations: [mockIntegration],
+        },
+      }),
+    );
+  });
+
+  it("does not include experimental_telemetry when no integrations", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "Who maintains String?",
+      apiKey: "test-key",
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        experimental_telemetry: expect.anything(),
+      }),
+    );
+  });
+
+  it("flushes integrations on error before fail-open", async () => {
+    mockedGenerateText.mockRejectedValue(new Error("API error"));
+
+    const mockIntegration = { flush: vi.fn().mockResolvedValue(undefined) };
+
+    const result = await checkGuardrails({
+      question: "test question",
+      apiKey: "test-key",
+      integrations: [mockIntegration as any],
+    });
+
+    expect(result).toEqual({ relevant: true, reason: "" });
+    expect(mockIntegration.flush).toHaveBeenCalledOnce();
+  });
 });

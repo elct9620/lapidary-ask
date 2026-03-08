@@ -461,6 +461,28 @@ describe("LangfuseTelemetryIntegration", () => {
     });
   });
 
+  it("uses custom agentName in agent-create event", async () => {
+    const customIntegration = new LangfuseTelemetryIntegration({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+      agentName: "check-guardrails",
+    });
+
+    await runLifecycle(customIntegration);
+
+    const batch = parseBatch();
+    const agentCreate = batch.find((e: any) => e.type === "agent-create");
+    expect(agentCreate.body.name).toBe("check-guardrails");
+  });
+
+  it("defaults agentName to ask-llm", async () => {
+    await runLifecycle(integration);
+
+    const batch = parseBatch();
+    const agentCreate = batch.find((e: any) => e.type === "agent-create");
+    expect(agentCreate.body.name).toBe("ask-llm");
+  });
+
   it("generation-update omits metadata when no providerMetadata", async () => {
     await runLifecycle(integration, {
       stepFinish: {

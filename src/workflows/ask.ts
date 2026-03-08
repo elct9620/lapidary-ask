@@ -10,7 +10,7 @@ import { LangfuseTelemetryIntegration } from "../telemetry/langfuse";
 
 function createTelemetryIntegration(
   env: Env,
-  traceId?: string,
+  options?: { traceId?: string; agentName?: string },
 ): LangfuseTelemetryIntegration | undefined {
   if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) {
     return undefined;
@@ -21,7 +21,8 @@ function createTelemetryIntegration(
     secretKey: env.LANGFUSE_SECRET_KEY,
     baseUrl: env.LANGFUSE_BASE_URL,
     environment: env.ENVIRONMENT,
-    traceId,
+    traceId: options?.traceId,
+    agentName: options?.agentName,
   });
 }
 
@@ -43,7 +44,9 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       "check-guardrails",
       { retries: { limit: 0, delay: "1 second" } },
       async () => {
-        const integration = createTelemetryIntegration(this.env);
+        const integration = createTelemetryIntegration(this.env, {
+          agentName: "check-guardrails",
+        });
         let traceId: string | undefined;
 
         if (integration) {
@@ -58,6 +61,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
           question,
           apiKey: this.env.OPENROUTER_API_KEY,
           locale,
+          integrations: integration ? [integration] : undefined,
         });
         const endTime = new Date().toISOString();
 
@@ -95,10 +99,9 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "ask-llm",
         { retries: { limit: 1, delay: "5 seconds" } },
         async () => {
-          const llmIntegration = createTelemetryIntegration(
-            this.env,
-            guardrails.traceId,
-          );
+          const llmIntegration = createTelemetryIntegration(this.env, {
+            traceId: guardrails.traceId,
+          });
           const integrations = llmIntegration ? [llmIntegration] : undefined;
 
           return await askLLM({
