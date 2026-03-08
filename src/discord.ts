@@ -1,8 +1,21 @@
 import { InteractionType } from "discord-api-types/v10";
 import { verifyKey } from "discord-interactions";
+import { patchDiscordResponse } from "./discord/api";
 import { getStringOption } from "./discord/helpers";
 
-const DISCORD_API_BASE = "https://discord.com/api/v10";
+interface DiscordInteraction {
+  type: number;
+  id: string;
+  token: string;
+  data?: {
+    name: string;
+    options?: Array<{
+      name: string;
+      type: number;
+      value?: string | number | boolean;
+    }>;
+  };
+}
 
 export async function handleDiscordWebhook(
   request: Request,
@@ -36,9 +49,9 @@ export async function handleDiscordWebhook(
     return new Response("Invalid signature", { status: 401 });
   }
 
-  let interaction: Record<string, unknown>;
+  let interaction: DiscordInteraction;
   try {
-    interaction = JSON.parse(body);
+    interaction = JSON.parse(body) as DiscordInteraction;
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }
@@ -56,11 +69,10 @@ export async function handleDiscordWebhook(
 }
 
 async function handleApplicationCommand(
-  interaction: Record<string, unknown>,
+  interaction: DiscordInteraction,
   env: Env,
 ): Promise<void> {
-  const data = interaction.data as Record<string, unknown> | undefined;
-  const commandName = data?.name as string | undefined;
+  const commandName = interaction.data?.name;
 
   if (commandName === "ask") {
     await handleAskCommand(interaction, env);
@@ -68,12 +80,12 @@ async function handleApplicationCommand(
 }
 
 async function handleAskCommand(
-  interaction: Record<string, unknown>,
+  interaction: DiscordInteraction,
   env: Env,
 ): Promise<void> {
   const question = getStringOption(interaction, "question");
-  const interactionId = interaction.id as string;
-  const interactionToken = interaction.token as string;
+  const interactionId = interaction.id;
+  const interactionToken = interaction.token;
   const applicationId = env.DISCORD_APPLICATION_ID;
 
   if (!question) {
@@ -90,18 +102,5 @@ async function handleAskCommand(
       interactionToken,
       applicationId,
     },
-  });
-}
-
-async function patchDiscordResponse(
-  applicationId: string,
-  interactionToken: string,
-  payload: { content: string },
-): Promise<void> {
-  const url = `${DISCORD_API_BASE}/webhooks/${applicationId}/${interactionToken}/messages/@original`;
-  await fetch(url, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
   });
 }

@@ -20,6 +20,28 @@ export function normalizeType(type: string): string {
   return typeNameMap[type.toLowerCase()] ?? type;
 }
 
+async function fetchFromGraph(fetcher: Fetcher, url: string): Promise<unknown> {
+  try {
+    const response = await fetcher.fetch(url);
+
+    if (response.ok) {
+      return await response.json();
+    }
+
+    if (response.status === 400) {
+      return { error: "Invalid parameters provided." };
+    }
+
+    if (response.status === 404) {
+      return { error: "The requested node does not exist." };
+    }
+
+    return { error: "Service is temporarily unavailable." };
+  } catch {
+    return { error: "Service is unreachable." };
+  }
+}
+
 export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
   return {
     searchNodes: tool({
@@ -37,27 +59,10 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
         if (type) params.set("type", normalizeType(type));
         if (query) params.set("q", query);
 
-        try {
-          const response = await fetcher.fetch(
-            `${baseUrl}/graph/nodes?${params.toString()}`,
-          );
-
-          if (response.ok) {
-            return await response.json();
-          }
-
-          if (response.status === 400) {
-            return { error: "Invalid parameters provided." };
-          }
-
-          if (response.status === 404) {
-            return { error: "The requested node does not exist." };
-          }
-
-          return { error: "Service is temporarily unavailable." };
-        } catch {
-          return { error: "Service is unreachable." };
-        }
+        return fetchFromGraph(
+          fetcher,
+          `${baseUrl}/graph/nodes?${params.toString()}`,
+        );
       },
     }),
 
@@ -74,27 +79,10 @@ export function createTools(fetcher: Fetcher, baseUrl: string): ToolSet {
         params.set("node_id", normalizeNodeId(nodeId));
         params.set("direction", "both");
 
-        try {
-          const response = await fetcher.fetch(
-            `${baseUrl}/graph/neighbors?${params.toString()}`,
-          );
-
-          if (response.ok) {
-            return await response.json();
-          }
-
-          if (response.status === 400) {
-            return { error: "Invalid parameters provided." };
-          }
-
-          if (response.status === 404) {
-            return { error: "The requested node does not exist." };
-          }
-
-          return { error: "Service is temporarily unavailable." };
-        } catch {
-          return { error: "Service is unreachable." };
-        }
+        return fetchFromGraph(
+          fetcher,
+          `${baseUrl}/graph/neighbors?${params.toString()}`,
+        );
       },
     }),
   };

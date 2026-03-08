@@ -4,6 +4,7 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 import { askLLM } from "../agent";
+import { patchDiscordResponse } from "../discord/api";
 import { formatForDiscord } from "../format";
 
 export interface AskWorkflowParams {
@@ -11,8 +12,6 @@ export interface AskWorkflowParams {
   interactionToken: string;
   applicationId: string;
 }
-
-const DISCORD_API_BASE = "https://discord.com/api/v10";
 
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   override async run(
@@ -40,7 +39,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "report-llm-error",
         { retries: { limit: 0, delay: "1 second" } },
         async () => {
-          await this.patchDiscordResponse(applicationId, interactionToken, {
+          await patchDiscordResponse(applicationId, interactionToken, {
             content: "LLM processing failed. Please try again later.",
           });
         },
@@ -54,7 +53,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         { retries: { limit: 2, delay: "2 seconds" } },
         async () => {
           const content = formatForDiscord(answer);
-          await this.patchDiscordResponse(applicationId, interactionToken, {
+          await patchDiscordResponse(applicationId, interactionToken, {
             content,
           });
         },
@@ -64,28 +63,11 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "report-post-error",
         { retries: { limit: 0, delay: "1 second" } },
         async () => {
-          await this.patchDiscordResponse(applicationId, interactionToken, {
+          await patchDiscordResponse(applicationId, interactionToken, {
             content: "LLM processing failed. Please try again later.",
           });
         },
       );
-    }
-  }
-
-  private async patchDiscordResponse(
-    applicationId: string,
-    interactionToken: string,
-    payload: { content: string },
-  ): Promise<void> {
-    const url = `${DISCORD_API_BASE}/webhooks/${applicationId}/${interactionToken}/messages/@original`;
-    const response = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Discord API error: ${response.status} ${errorText}`);
     }
   }
 }
