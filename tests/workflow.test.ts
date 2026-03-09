@@ -6,6 +6,7 @@ const workflowParams = {
   interactionToken: "token-123",
   applicationId: "app-id",
   locale: "zh-TW",
+  userId: "user-123",
 };
 
 describe("AskWorkflow", () => {

@@ -5,6 +5,7 @@ import {
 } from "cloudflare:workers";
 import { askLLM, checkGuardrails } from "../agent";
 import { patchDiscordResponse } from "../discord/api";
+import { buildFeedbackButtons } from "../discord/components";
 import { formatForDiscord } from "../format";
 import { LangfuseClient } from "../telemetry/client";
 import { LangfuseTracer } from "../telemetry/tracer";
@@ -32,6 +33,7 @@ export interface AskWorkflowParams {
   interactionToken: string;
   applicationId: string;
   locale: string;
+  userId: string;
 }
 
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
@@ -112,7 +114,8 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     event: WorkflowEvent<AskWorkflowParams>,
     step: WorkflowStep,
   ) {
-    const { question, interactionToken, applicationId, locale } = event.payload;
+    const { question, interactionToken, applicationId, locale, userId } =
+      event.payload;
 
     const guardrails = await step.do(
       "check-guardrails",
@@ -159,8 +162,12 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         { timeout: "30 seconds", retries: { limit: 2, delay: "2 seconds" } },
         async () => {
           const content = formatForDiscord(answer);
+          const components = guardrails.traceId
+            ? buildFeedbackButtons(guardrails.traceId, userId)
+            : undefined;
           await patchDiscordResponse(applicationId, interactionToken, {
             content,
+            components,
           });
         },
       );

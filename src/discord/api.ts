@@ -1,9 +1,17 @@
+import type {
+  APIActionRowComponent,
+  APIComponentInMessageActionRow,
+} from "discord-api-types/v10";
+
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
 export async function patchDiscordResponse(
   applicationId: string,
   interactionToken: string,
-  payload: { content: string },
+  payload: {
+    content: string;
+    components?: APIActionRowComponent<APIComponentInMessageActionRow>[];
+  },
 ): Promise<void> {
   const url = `${DISCORD_API_BASE}/webhooks/${applicationId}/${interactionToken}/messages/@original`;
   const response = await fetch(url, {

@@ -3,9 +3,11 @@ import {
   InteractionResponseType,
   type APIInteraction,
   type APIChatInputApplicationCommandInteraction,
+  type APIMessageComponentInteraction,
 } from "discord-api-types/v10";
 import { verifyKey } from "discord-interactions";
 import { patchDiscordResponse } from "./discord/api";
+import { handleFeedbackInteraction } from "./discord/feedback";
 import { getStringOption } from "./discord/helpers";
 
 export async function handleDiscordWebhook(
@@ -63,6 +65,17 @@ export async function handleDiscordWebhook(
     });
   }
 
+  if (interaction.type === InteractionType.MessageComponent) {
+    const { response, pending } = handleFeedbackInteraction(
+      interaction as APIMessageComponentInteraction,
+      env,
+    );
+    if (pending) {
+      ctx.waitUntil(pending);
+    }
+    return response;
+  }
+
   return new Response("Unknown interaction type", { status: 400 });
 }
 
@@ -86,6 +99,7 @@ async function handleAskCommand(
   const interactionToken = interaction.token;
   const applicationId = env.DISCORD_APPLICATION_ID;
   const locale = interaction.locale ?? "zh-TW";
+  const userId = interaction.member?.user?.id ?? interaction.user?.id ?? "";
 
   if (!question) {
     await patchDiscordResponse(applicationId, interactionToken, {
@@ -101,6 +115,7 @@ async function handleAskCommand(
       interactionToken,
       applicationId,
       locale,
+      userId,
     },
   });
 }

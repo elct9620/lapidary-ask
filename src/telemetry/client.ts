@@ -22,6 +22,20 @@ export class LangfuseClient {
     this.events.push(event);
   }
 
+  createScore(traceId: string, name: string, value: number): void {
+    this.emit({
+      id: crypto.randomUUID(),
+      type: "score-create",
+      timestamp: new Date().toISOString(),
+      body: {
+        traceId,
+        name,
+        value,
+        dataType: "NUMERIC",
+      },
+    });
+  }
+
   async flush(): Promise<void> {
     if (this.events.length === 0) {
       return;

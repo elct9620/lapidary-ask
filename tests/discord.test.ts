@@ -156,6 +156,7 @@ describe("handleDiscordWebhook", () => {
         interactionToken: "test-token",
         applicationId: TEST_APP_ID,
         locale: "zh-TW",
+        userId: "user1",
       },
     });
   });
@@ -199,5 +200,132 @@ describe("handleDiscordWebhook", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  describe("MessageComponent interactions (feedback)", () => {
+    it("returns UpdateMessage with empty components and does not call Langfuse without keys", async () => {
+      const mockFetch = vi.fn().mockResolvedValue(new Response("ok"));
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = mockFetch;
+
+      try {
+        const request = await makeSignedRequest({
+          type: 3, // MessageComponent
+          id: "interaction-fb-1",
+          token: "fb-token",
+          data: {
+            component_type: 2,
+            custom_id: "feedback:trace-abc:user1:up",
+          },
+          member: {
+            user: { id: "user1", username: "testuser" },
+          },
+        });
+
+        const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as any;
+        expect(body.type).toBe(7); // UpdateMessage
+        expect(body.data.components).toEqual([]);
+        expect(waitUntilPromises).toHaveLength(0);
+        expect(mockFetch).not.toHaveBeenCalled();
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("returns ephemeral message when non-original user clicks feedback", async () => {
+      const request = await makeSignedRequest({
+        type: 3,
+        id: "interaction-fb-2",
+        token: "fb-token-2",
+        data: {
+          component_type: 2,
+          custom_id: "feedback:trace-abc:user1:down",
+        },
+        member: {
+          user: { id: "user-other", username: "otheruser" },
+        },
+      });
+
+      const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as any;
+      expect(body.type).toBe(4); // ChannelMessageWithSource
+      expect(body.data.flags).toBe(64); // Ephemeral
+      expect(body.data.content).toContain("只有提問者可以評分");
+    });
+
+    it("returns ephemeral error for invalid custom_id", async () => {
+      const request = await makeSignedRequest({
+        type: 3,
+        id: "interaction-fb-3",
+        token: "fb-token-3",
+        data: {
+          component_type: 2,
+          custom_id: "invalid-format",
+        },
+        member: {
+          user: { id: "user1", username: "testuser" },
+        },
+      });
+
+      const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as any;
+      expect(body.type).toBe(4); // ChannelMessageWithSource
+      expect(body.data.flags).toBe(64); // Ephemeral
+    });
+
+    it("sends Langfuse score when feedback is valid", async () => {
+      const mockFetch = vi.fn().mockResolvedValue(new Response("ok"));
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = mockFetch;
+
+      const envWithLangfuse = {
+        ...mockEnv,
+        LANGFUSE_PUBLIC_KEY: "pk-test",
+        LANGFUSE_SECRET_KEY: "sk-test",
+        LANGFUSE_BASE_URL: "https://langfuse.test",
+      } as unknown as Env;
+
+      try {
+        const request = await makeSignedRequest({
+          type: 3,
+          id: "interaction-fb-4",
+          token: "fb-token-4",
+          data: {
+            component_type: 2,
+            custom_id: "feedback:trace-xyz:user1:down",
+          },
+          member: {
+            user: { id: "user1", username: "testuser" },
+          },
+        });
+
+        const response = await handleDiscordWebhook(
+          request,
+          mockCtx,
+          envWithLangfuse,
+        );
+        expect(response.status).toBe(200);
+        const body = (await response.json()) as any;
+        expect(body.type).toBe(7); // UpdateMessage
+
+        await Promise.all(waitUntilPromises);
+
+        expect(mockFetch).toHaveBeenCalledOnce();
+        const [url, opts] = mockFetch.mock.calls[0]!;
+        expect(url).toBe("https://langfuse.test/api/public/ingestion");
+        const batchBody = JSON.parse(opts.body);
+        const scoreEvent = batchBody.batch[0];
+        expect(scoreEvent.type).toBe("score-create");
+        expect(scoreEvent.body.traceId).toBe("trace-xyz");
+        expect(scoreEvent.body.name).toBe("user-feedback");
+        expect(scoreEvent.body.value).toBe(0); // down = 0
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 });
