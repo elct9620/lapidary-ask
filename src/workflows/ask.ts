@@ -11,9 +11,16 @@ import { LangfuseClient } from "../telemetry/client";
 import { LangfuseTracer } from "../telemetry/tracer";
 import { LangfuseTelemetryIntegration } from "../telemetry/integration";
 
-function createTracer(env: Env): LangfuseTracer | undefined {
+export function createTelemetryContext(
+  env: Env,
+  options?: {
+    traceId?: string;
+    agentName?: string;
+    skipAgentSpan?: boolean;
+  },
+): { tracer?: LangfuseTracer; integrations?: LangfuseTelemetryIntegration[] } {
   if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) {
-    return undefined;
+    return {};
   }
 
   const client = new LangfuseClient({
@@ -22,10 +29,24 @@ function createTracer(env: Env): LangfuseTracer | undefined {
     baseUrl: env.LANGFUSE_BASE_URL,
   });
 
-  return new LangfuseTracer({
+  const tracer = new LangfuseTracer({
     client,
     environment: env.ENVIRONMENT,
   });
+
+  if (options?.traceId) {
+    tracer.setTraceId(options.traceId);
+  }
+
+  const integrations = [
+    new LangfuseTelemetryIntegration({
+      tracer,
+      agentName: options?.agentName,
+      skipAgentSpan: options?.skipAgentSpan,
+    }),
+  ];
+
+  return { tracer, integrations };
 }
 
 export interface AskWorkflowParams {
@@ -38,18 +59,16 @@ export interface AskWorkflowParams {
 
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   private async checkGuardrailsStep(question: string, locale: string) {
-    const tracer = createTracer(this.env);
-    let traceId: string | undefined;
-    let integrations: LangfuseTelemetryIntegration[] | undefined;
+    const { tracer, integrations } = createTelemetryContext(this.env, {
+      skipAgentSpan: true,
+    });
 
+    let traceId: string | undefined;
     if (tracer) {
       traceId = tracer.createTrace({
         name: "ask-workflow",
         input: { question, locale },
       });
-      integrations = [
-        new LangfuseTelemetryIntegration({ tracer, skipAgentSpan: true }),
-      ];
     }
 
     const startTime = new Date().toISOString();
@@ -76,17 +95,9 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   }
 
   private async askLLMStep(question: string, locale: string, traceId?: string) {
-    const tracer = createTracer(this.env);
-    let integrations: LangfuseTelemetryIntegration[] | undefined;
-
-    if (tracer && traceId) {
-      tracer.setTraceId(traceId);
-      const llmIntegration = new LangfuseTelemetryIntegration({
-        tracer,
-        agentName: "ask-llm",
-      });
-      integrations = [llmIntegration];
-    }
+    const { tracer, integrations } = traceId
+      ? createTelemetryContext(this.env, { traceId, agentName: "ask-llm" })
+      : { tracer: undefined, integrations: undefined };
 
     try {
       return await askLLM({
