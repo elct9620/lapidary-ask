@@ -116,19 +116,7 @@ export class LangfuseTracer {
     endTime: string;
     metadata?: Record<string, unknown>;
   }): string {
-    const toolId = crypto.randomUUID();
-    this.emit("tool-create", {
-      id: toolId,
-      traceId: this._traceId,
-      parentObservationId: options.parentId,
-      name: options.name,
-      input: options.input,
-      output: options.output,
-      startTime: options.startTime,
-      endTime: options.endTime,
-      ...(options.metadata && { metadata: options.metadata }),
-    });
-    return toolId;
+    return this.createObservation("tool", options);
   }
 
   createGuardrail(options: {
@@ -139,10 +127,28 @@ export class LangfuseTracer {
     endTime: string;
     metadata?: Record<string, unknown>;
   }): string {
-    const guardrailId = crypto.randomUUID();
-    this.emit("guardrail-create", {
-      id: guardrailId,
+    return this.createObservation("guardrail", options);
+  }
+
+  private createObservation(
+    type: string,
+    options: {
+      parentId?: string | null;
+      name: string;
+      input: unknown;
+      output: unknown;
+      startTime: string;
+      endTime: string;
+      metadata?: Record<string, unknown>;
+    },
+  ): string {
+    const id = crypto.randomUUID();
+    this.emit(`${type}-create`, {
+      id,
       traceId: this._traceId,
+      ...(options.parentId !== undefined && {
+        parentObservationId: options.parentId,
+      }),
       name: options.name,
       input: options.input,
       output: options.output,
@@ -150,7 +156,7 @@ export class LangfuseTracer {
       endTime: options.endTime,
       ...(options.metadata && { metadata: options.metadata }),
     });
-    return guardrailId;
+    return id;
   }
 
   async flush(): Promise<void> {
