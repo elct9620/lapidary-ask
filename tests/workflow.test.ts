@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { env, introspectWorkflowInstance } from "cloudflare:test";
+import { createTelemetryContext } from "../src/workflows/ask";
 
 const workflowParams = {
   question: "Who maintains String?",
@@ -8,6 +9,47 @@ const workflowParams = {
   locale: "zh-TW",
   userId: "user-123",
 };
+
+describe("createTelemetryContext", () => {
+  it("should return empty object when env keys missing", () => {
+    const result = createTelemetryContext({} as Env);
+    expect(result).toEqual({});
+    expect(result.tracer).toBeUndefined();
+    expect(result.integrations).toBeUndefined();
+  });
+
+  it("should return tracer and integrations when env keys present", () => {
+    const result = createTelemetryContext({
+      LANGFUSE_PUBLIC_KEY: "pk-test",
+      LANGFUSE_SECRET_KEY: "sk-test",
+    } as Env);
+
+    expect(result.tracer).toBeDefined();
+    expect(result.integrations).toHaveLength(1);
+  });
+
+  it("should set traceId when traceId option provided", () => {
+    const result = createTelemetryContext(
+      {
+        LANGFUSE_PUBLIC_KEY: "pk-test",
+        LANGFUSE_SECRET_KEY: "sk-test",
+      } as Env,
+      { traceId: "existing-trace-id" },
+    );
+
+    expect(result.tracer).toBeDefined();
+    expect(result.tracer!.traceId).toBe("existing-trace-id");
+  });
+
+  it("should not set traceId when traceId option omitted", () => {
+    const result = createTelemetryContext({
+      LANGFUSE_PUBLIC_KEY: "pk-test",
+      LANGFUSE_SECRET_KEY: "sk-test",
+    } as Env);
+
+    expect(result.tracer!.traceId).toBeNull();
+  });
+});
 
 describe("AskWorkflow", () => {
   it("happy path: guardrails pass -> askLLM -> post response", async () => {
