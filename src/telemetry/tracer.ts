@@ -120,6 +120,7 @@ export class LangfuseTracer {
   }
 
   createGuardrail(options: {
+    id?: string;
     name: string;
     input: unknown;
     output: unknown;
@@ -133,6 +134,7 @@ export class LangfuseTracer {
   private createObservation(
     type: string,
     options: {
+      id?: string;
       parentId?: string | null;
       name: string;
       input: unknown;
@@ -142,7 +144,7 @@ export class LangfuseTracer {
       metadata?: Record<string, unknown>;
     },
   ): string {
-    const id = crypto.randomUUID();
+    const id = options.id ?? crypto.randomUUID();
     this.emit(`${type}-create`, {
       id,
       traceId: this._traceId,

@@ -17,6 +17,7 @@ export function createTelemetryContext(
     traceId?: string;
     agentName?: string;
     skipAgentSpan?: boolean;
+    parentId?: string;
   },
 ): { tracer?: LangfuseTracer; integrations?: LangfuseTelemetryIntegration[] } {
   if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) {
@@ -43,6 +44,7 @@ export function createTelemetryContext(
       tracer,
       agentName: options?.agentName,
       skipAgentSpan: options?.skipAgentSpan,
+      parentId: options?.parentId,
     }),
   ];
 
@@ -59,8 +61,10 @@ export interface AskWorkflowParams {
 
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   private async checkGuardrailsStep(question: string, locale: string) {
+    const guardrailId = crypto.randomUUID();
     const { tracer, integrations } = createTelemetryContext(this.env, {
       skipAgentSpan: true,
+      parentId: guardrailId,
     });
 
     let traceId: string | undefined;
@@ -82,6 +86,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
 
     if (tracer) {
       tracer.createGuardrail({
+        id: guardrailId,
         name: "check-guardrails",
         input: question,
         output: result,

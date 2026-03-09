@@ -319,6 +319,30 @@ describe("LangfuseTracer", () => {
     expect(guardrailEvent.body.traceId).toBe("uuid-1");
   });
 
+  it("createGuardrail uses provided id when given", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+
+    const id = tracer.createGuardrail({
+      id: "pre-generated-guardrail-id",
+      name: "check-guardrails",
+      input: "What is Ruby?",
+      output: { relevant: true, reason: "" },
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+    });
+
+    expect(id).toBe("pre-generated-guardrail-id");
+
+    await tracer.flush();
+    const batch = parseBatch();
+    const guardrailEvent = batch.find(
+      (e: any) => e.type === "guardrail-create",
+    );
+
+    expect(guardrailEvent.body.id).toBe("pre-generated-guardrail-id");
+  });
+
   it("setTraceId allows using existing trace", async () => {
     const tracer = new LangfuseTracer({ client });
     tracer.setTraceId("existing-trace-id");
