@@ -1,14 +1,13 @@
 import { generateText, stepCountIs, type TelemetryIntegration } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt, DEFAULT_LOCALE } from "./prompt";
-import { createTools } from "./tools";
+import { type createTools } from "./tools";
 import { buildTelemetryConfig } from "./telemetry-helpers";
 
 export interface AskLLMOptions {
   question: string;
-  apiKey: string;
-  internalApi: Fetcher;
-  internalApiUrl: string;
+  openrouter: OpenRouterProvider;
+  tools: ReturnType<typeof createTools>;
   locale?: string;
   integrations?: TelemetryIntegration[];
 }
@@ -16,14 +15,11 @@ export interface AskLLMOptions {
 export async function askLLM(options: AskLLMOptions): Promise<string> {
   const {
     question,
-    apiKey,
-    internalApi,
-    internalApiUrl,
+    openrouter,
+    tools,
     locale = DEFAULT_LOCALE,
     integrations,
   } = options;
-  const openrouter = createOpenRouter({ apiKey });
-  const tools = createTools(internalApi, internalApiUrl);
   const { text } = await generateText({
     model: openrouter("openrouter/free"),
     system: buildSystemPrompt(locale),

@@ -8,14 +8,12 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
-vi.mock("@openrouter/ai-sdk-provider", () => ({
-  createOpenRouter: vi.fn(() => vi.fn((model: string) => `model:${model}`)),
-}));
-
 import { checkGuardrails } from "../src/agent/guardrails";
-import { generateText, Output } from "ai";
+import { generateText } from "ai";
 
 const mockedGenerateText = vi.mocked(generateText);
+
+const mockOpenrouter = vi.fn((model: string) => `model:${model}`) as any;
 
 describe("checkGuardrails", () => {
   it("returns relevant: true for related questions", async () => {
@@ -25,7 +23,7 @@ describe("checkGuardrails", () => {
 
     const result = await checkGuardrails({
       question: "Who maintains the String module?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(result).toEqual({ relevant: true, reason: "" });
@@ -41,7 +39,7 @@ describe("checkGuardrails", () => {
 
     const result = await checkGuardrails({
       question: "How do I cook pasta?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(result).toEqual({
@@ -55,7 +53,7 @@ describe("checkGuardrails", () => {
 
     const result = await checkGuardrails({
       question: "test question",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(result).toEqual({ relevant: true, reason: "" });
@@ -68,7 +66,7 @@ describe("checkGuardrails", () => {
 
     const result = await checkGuardrails({
       question: "test question",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(result).toEqual({ relevant: true, reason: "" });
@@ -81,7 +79,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "How do I cook pasta?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
       locale: "ja",
     });
 
@@ -99,7 +97,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "Who maintains String?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
@@ -116,7 +114,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "Who maintains String?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
@@ -138,7 +136,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "Who maintains String?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
       integrations: [mockIntegration as any],
     });
 
@@ -159,7 +157,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "Tell me about rdoc",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
@@ -176,7 +174,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "Tell me about rdoc",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
@@ -193,7 +191,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "How do I use Array?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
@@ -212,7 +210,7 @@ describe("checkGuardrails", () => {
 
     await checkGuardrails({
       question: "Who maintains String?",
-      apiKey: "test-key",
+      openrouter: mockOpenrouter,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(

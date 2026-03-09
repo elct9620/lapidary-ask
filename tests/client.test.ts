@@ -10,18 +10,18 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
-vi.mock("@openrouter/ai-sdk-provider", () => ({
-  createOpenRouter: vi.fn(() => vi.fn((model: string) => `model:${model}`)),
-}));
-
 import { askLLM } from "../src/agent/client";
 import { generateText } from "ai";
 
 const mockedGenerateText = vi.mocked(generateText);
 
-describe("askLLM", () => {
-  const mockFetcher = { fetch: vi.fn() } as unknown as Fetcher;
+const mockOpenrouter = vi.fn((model: string) => `model:${model}`) as any;
+const mockTools = {
+  searchNodes: { execute: vi.fn() },
+  getNeighbors: { execute: vi.fn() },
+} as any;
 
+describe("askLLM", () => {
   it("returns LLM text on success", async () => {
     mockedGenerateText.mockResolvedValue({
       text: "Hello from LLM",
@@ -29,9 +29,8 @@ describe("askLLM", () => {
 
     const result = await askLLM({
       question: "What is Ruby?",
-      apiKey: "test-key",
-      internalApi: mockFetcher,
-      internalApiUrl: "http://api.test",
+      openrouter: mockOpenrouter,
+      tools: mockTools,
     });
 
     expect(result).toBe("Hello from LLM");
@@ -44,9 +43,8 @@ describe("askLLM", () => {
 
     const result = await askLLM({
       question: "What is Ruby?",
-      apiKey: "test-key",
-      internalApi: mockFetcher,
-      internalApiUrl: "http://api.test",
+      openrouter: mockOpenrouter,
+      tools: mockTools,
     });
 
     expect(result).toBe("No response.");
@@ -59,9 +57,8 @@ describe("askLLM", () => {
 
     await askLLM({
       question: "test question",
-      apiKey: "test-key",
-      internalApi: mockFetcher,
-      internalApiUrl: "http://api.test",
+      openrouter: mockOpenrouter,
+      tools: mockTools,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
@@ -69,10 +66,7 @@ describe("askLLM", () => {
         system: buildSystemPrompt("zh-TW"),
         prompt: "test question",
         stopWhen: "stepCountIs(15)",
-        tools: expect.objectContaining({
-          searchNodes: expect.anything(),
-          getNeighbors: expect.anything(),
-        }),
+        tools: mockTools,
       }),
     );
   });
@@ -86,9 +80,8 @@ describe("askLLM", () => {
 
     await askLLM({
       question: "test question",
-      apiKey: "test-key",
-      internalApi: mockFetcher,
-      internalApiUrl: "http://api.test",
+      openrouter: mockOpenrouter,
+      tools: mockTools,
       integrations: [mockIntegration],
     });
 
@@ -109,9 +102,8 @@ describe("askLLM", () => {
 
     await askLLM({
       question: "test question",
-      apiKey: "test-key",
-      internalApi: mockFetcher,
-      internalApiUrl: "http://api.test",
+      openrouter: mockOpenrouter,
+      tools: mockTools,
     });
 
     const call = mockedGenerateText.mock.calls[0][0];
@@ -125,9 +117,8 @@ describe("askLLM", () => {
 
     await askLLM({
       question: "test question",
-      apiKey: "test-key",
-      internalApi: mockFetcher,
-      internalApiUrl: "http://api.test",
+      openrouter: mockOpenrouter,
+      tools: mockTools,
       locale: "ja",
     });
 

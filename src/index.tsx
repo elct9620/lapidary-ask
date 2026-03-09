@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { env } from "cloudflare:workers";
 import { handleDiscordWebhook } from "./discord";
 
 export { AskWorkflow } from "./workflows/ask";
@@ -11,7 +10,7 @@ app.get("/", (c) => {
 });
 
 app.post("/api/webhooks/discord", async (c) => {
-  return handleDiscordWebhook(c.req.raw, c.executionCtx, env);
+  return handleDiscordWebhook(c.req.raw, c.executionCtx);
 });
 
 export default app;

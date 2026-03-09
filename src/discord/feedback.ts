@@ -4,7 +4,7 @@ import {
   type APIMessageComponentInteraction,
 } from "discord-api-types/v10";
 import { t } from "../locale";
-import { createLangfuseClient } from "../telemetry/client";
+import type { Container } from "../container";
 
 export const FEEDBACK_PREFIX = "feedback";
 
@@ -54,7 +54,7 @@ function ephemeralResponse(content: string): Response {
 
 export function handleFeedbackInteraction(
   interaction: APIMessageComponentInteraction,
-  env: Env,
+  container: Pick<Container, "createLangfuseClient">,
 ): FeedbackResult {
   const locale = interaction.locale ?? "zh-TW";
   const feedback = parseFeedbackCustomId(interaction.data.custom_id);
@@ -72,9 +72,8 @@ export function handleFeedbackInteraction(
 
   let pending: Promise<void> | undefined;
 
-  if (env.LANGFUSE_PUBLIC_KEY && env.LANGFUSE_SECRET_KEY) {
-    const client = createLangfuseClient(env);
-
+  const client = container.createLangfuseClient();
+  if (client) {
     client.createScore(
       feedback.traceId,
       "user-feedback",

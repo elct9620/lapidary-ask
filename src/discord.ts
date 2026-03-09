@@ -7,13 +7,13 @@ import {
 } from "discord-api-types/v10";
 import { verifyKey } from "discord-interactions";
 import { DEFAULT_LOCALE } from "./agent/prompt";
-import { patchDiscordResponse } from "./discord/api";
+import { createContainer } from "./container";
 import { handleFeedbackInteraction } from "./discord/feedback";
 import { getStringOption } from "./discord/helpers";
 
 async function verifySignature(
   request: Request,
-  env: Env,
+  discordPublicKey: string,
 ): Promise<{ valid: true; body: string } | { valid: false }> {
   const bodyBuffer = await request.arrayBuffer();
   const bodyBytes = new Uint8Array(bodyBuffer);
@@ -30,7 +30,7 @@ async function verifySignature(
       bodyBytes,
       signature,
       timestamp,
-      env.DISCORD_PUBLIC_KEY,
+      discordPublicKey,
     );
     if (!isValid) return { valid: false };
   } catch {
@@ -43,9 +43,12 @@ async function verifySignature(
 export async function handleDiscordWebhook(
   request: Request,
   ctx: Pick<ExecutionContext, "waitUntil">,
-  env: Env,
 ): Promise<Response> {
-  const verification = await verifySignature(request, env);
+  const container = createContainer();
+  const verification = await verifySignature(
+    request,
+    container.discordPublicKey,
+  );
   if (!verification.valid) {
     return new Response("Invalid signature", { status: 401 });
   }
@@ -65,7 +68,7 @@ export async function handleDiscordWebhook(
     ctx.waitUntil(
       handleApplicationCommand(
         interaction as APIChatInputApplicationCommandInteraction,
-        env,
+        container,
       ),
     );
     return Response.json({
@@ -76,7 +79,7 @@ export async function handleDiscordWebhook(
   if (interaction.type === InteractionType.MessageComponent) {
     const { response, pending } = handleFeedbackInteraction(
       interaction as APIMessageComponentInteraction,
-      env,
+      container,
     );
     if (pending) {
       ctx.waitUntil(pending);
@@ -89,39 +92,37 @@ export async function handleDiscordWebhook(
 
 async function handleApplicationCommand(
   interaction: APIChatInputApplicationCommandInteraction,
-  env: Env,
+  container: ReturnType<typeof createContainer>,
 ): Promise<void> {
   const commandName = interaction.data?.name;
 
   if (commandName === "ask") {
-    await handleAskCommand(interaction, env);
+    await handleAskCommand(interaction, container);
   }
 }
 
 async function handleAskCommand(
   interaction: APIChatInputApplicationCommandInteraction,
-  env: Env,
+  container: ReturnType<typeof createContainer>,
 ): Promise<void> {
   const question = getStringOption(interaction, "question");
   const interactionId = interaction.id;
   const interactionToken = interaction.token;
-  const applicationId = env.DISCORD_APPLICATION_ID;
   const locale = interaction.locale ?? DEFAULT_LOCALE;
   const userId = interaction.member?.user?.id ?? interaction.user?.id ?? "";
 
   if (!question) {
-    await patchDiscordResponse(applicationId, interactionToken, {
+    await container.patchDiscordResponse(interactionToken, {
       content: "Please provide a question.",
     });
     return;
   }
 
-  await env.ASK_WORKFLOW.create({
+  await container.askWorkflow.create({
     id: interactionId,
     params: {
       question,
       interactionToken,
-      applicationId,
       locale,
       userId,
     },

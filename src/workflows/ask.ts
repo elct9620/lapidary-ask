@@ -4,11 +4,10 @@ import {
   type WorkflowStep,
 } from "cloudflare:workers";
 import { askLLM, checkGuardrails } from "../agent";
-import { patchDiscordResponse } from "../discord/api";
 import { buildFeedbackButtons } from "../discord/components";
+import { createContainer } from "../container";
 import { formatForDiscord } from "../format";
 import { t } from "../locale";
-import { createTelemetryContext } from "../telemetry/context";
 
 const GUARDRAILS_STEP_CONFIG = {
   timeout: "1 minute" as const,
@@ -33,15 +32,15 @@ const FIRE_AND_FORGET_STEP_CONFIG = {
 export interface AskWorkflowParams {
   question: string;
   interactionToken: string;
-  applicationId: string;
   locale: string;
   userId: string;
 }
 
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   private async checkGuardrailsStep(question: string, locale: string) {
+    const container = createContainer();
     const guardrailId = crypto.randomUUID();
-    const { tracer, integrations } = createTelemetryContext(this.env, {
+    const { tracer, integrations } = container.createTelemetryContext({
       skipAgentSpan: true,
       parentId: guardrailId,
     });
@@ -54,7 +53,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     const startTime = new Date().toISOString();
     const result = await checkGuardrails({
       question,
-      apiKey: this.env.OPENROUTER_API_KEY,
+      openrouter: container.openrouter,
       locale,
       integrations,
     });
@@ -76,16 +75,16 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   }
 
   private async askLLMStep(question: string, locale: string, traceId?: string) {
+    const container = createContainer();
     const { tracer, integrations } = traceId
-      ? createTelemetryContext(this.env, { traceId, agentName: "ask-llm" })
+      ? container.createTelemetryContext({ traceId, agentName: "ask-llm" })
       : { tracer: undefined, integrations: undefined };
 
     try {
       return await askLLM({
         question,
-        apiKey: this.env.OPENROUTER_API_KEY,
-        internalApi: this.env.INTERNAL_API,
-        internalApiUrl: this.env.INTERNAL_API_URL,
+        openrouter: container.openrouter,
+        tools: container.tools,
         locale,
         integrations,
       });
@@ -99,8 +98,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     event: WorkflowEvent<AskWorkflowParams>,
     step: WorkflowStep,
   ) {
-    const { question, interactionToken, applicationId, locale, userId } =
-      event.payload;
+    const { question, interactionToken, locale, userId } = event.payload;
 
     const guardrails = await step.do(
       "check-guardrails",
@@ -113,7 +111,8 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "post-guardrails-rejection",
         DISCORD_POST_STEP_CONFIG,
         async () => {
-          await patchDiscordResponse(applicationId, interactionToken, {
+          const container = createContainer();
+          await container.patchDiscordResponse(interactionToken, {
             content: guardrails.reason,
           });
         },
@@ -131,7 +130,8 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "report-llm-error",
         FIRE_AND_FORGET_STEP_CONFIG,
         async () => {
-          await patchDiscordResponse(applicationId, interactionToken, {
+          const container = createContainer();
+          await container.patchDiscordResponse(interactionToken, {
             content: t("llmProcessingFailed", locale),
           });
         },
@@ -141,11 +141,12 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
 
     try {
       await step.do("post-response", DISCORD_POST_STEP_CONFIG, async () => {
+        const container = createContainer();
         const content = formatForDiscord(answer);
         const components = guardrails.traceId
           ? buildFeedbackButtons(guardrails.traceId, userId)
           : undefined;
-        await patchDiscordResponse(applicationId, interactionToken, {
+        await container.patchDiscordResponse(interactionToken, {
           content,
           components,
         });
@@ -155,7 +156,8 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         "report-post-error",
         FIRE_AND_FORGET_STEP_CONFIG,
         async () => {
-          await patchDiscordResponse(applicationId, interactionToken, {
+          const container = createContainer();
+          await container.patchDiscordResponse(interactionToken, {
             content: t("postResponseFailed", locale),
           });
         },

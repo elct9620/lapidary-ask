@@ -1,13 +1,13 @@
 import { generateText, Output } from "ai";
 import type { TelemetryIntegration } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { getLanguageName, DEFAULT_LOCALE } from "./prompt";
 import { buildTelemetryConfig } from "./telemetry-helpers";
 
 export interface CheckGuardrailsOptions {
   question: string;
-  apiKey: string;
+  openrouter: OpenRouterProvider;
   locale?: string;
   integrations?: TelemetryIntegration[];
 }
@@ -62,8 +62,12 @@ export async function checkGuardrails(
   options: CheckGuardrailsOptions,
 ): Promise<GuardrailsResult> {
   try {
-    const { question, apiKey, locale = DEFAULT_LOCALE, integrations } = options;
-    const openrouter = createOpenRouter({ apiKey });
+    const {
+      question,
+      openrouter,
+      locale = DEFAULT_LOCALE,
+      integrations,
+    } = options;
 
     const { output } = await generateText({
       model: openrouter("openrouter/free"),

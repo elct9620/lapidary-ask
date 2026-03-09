@@ -1,9 +1,28 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
+
+// --- Mock createContainer ---
+const mockWorkflowCreate = vi.fn().mockResolvedValue({ id: "wf-1" });
+const mockPatchDiscordResponse = vi.fn().mockResolvedValue(undefined);
+const mockCreateLangfuseClient = vi.fn().mockReturnValue(null);
+
+let TEST_PUBLIC_KEY_HEX: string;
+
+vi.mock("../src/container", () => ({
+  createContainer: () => ({
+    discordPublicKey: TEST_PUBLIC_KEY_HEX,
+    askWorkflow: {
+      create: mockWorkflowCreate,
+      get: vi.fn(),
+    },
+    patchDiscordResponse: mockPatchDiscordResponse,
+    createLangfuseClient: mockCreateLangfuseClient,
+  }),
+}));
+
 import { handleDiscordWebhook } from "../src/discord";
 
 // --- Ed25519 key pair helpers ---
 
-let TEST_PUBLIC_KEY_HEX: string;
 let signingKey: CryptoKey;
 
 async function generateEd25519KeyPair() {
@@ -46,10 +65,7 @@ async function makeSignedRequest(body: object): Promise<Request> {
 
 // --- Test setup ---
 
-const TEST_APP_ID = "test-app-id";
-
-let mockEnv: Env;
-let mockCtx: ExecutionContext;
+let mockCtx: Pick<ExecutionContext, "waitUntil">;
 let waitUntilPromises: Promise<unknown>[];
 
 beforeAll(async () => {
@@ -64,21 +80,11 @@ beforeEach(() => {
     waitUntil: (p: Promise<unknown>) => {
       waitUntilPromises.push(p);
     },
-    passThroughOnException: vi.fn(),
-  } as unknown as ExecutionContext;
+  };
 
-  mockEnv = {
-    DISCORD_PUBLIC_KEY: TEST_PUBLIC_KEY_HEX,
-    DISCORD_APPLICATION_ID: TEST_APP_ID,
-    DISCORD_BOT_TOKEN: "test-bot-token",
-    OPENROUTER_API_KEY: "test-key",
-    INTERNAL_API_URL: "http://internal.test",
-    INTERNAL_API: {} as Fetcher,
-    ASK_WORKFLOW: {
-      create: vi.fn().mockResolvedValue({ id: "wf-1" }),
-      get: vi.fn(),
-    } as unknown as Workflow,
-  } as unknown as Env;
+  mockWorkflowCreate.mockClear();
+  mockPatchDiscordResponse.mockClear();
+  mockCreateLangfuseClient.mockClear().mockReturnValue(null);
 });
 
 // --- Tests ---
@@ -90,7 +96,7 @@ describe("handleDiscordWebhook", () => {
       body: JSON.stringify({ type: 1 }),
     });
 
-    const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+    const response = await handleDiscordWebhook(request, mockCtx);
     expect(response.status).toBe(401);
   });
 
@@ -104,14 +110,14 @@ describe("handleDiscordWebhook", () => {
       body: JSON.stringify({ type: 1 }),
     });
 
-    const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+    const response = await handleDiscordWebhook(request, mockCtx);
     expect(response.status).toBe(401);
   });
 
   it("responds with PONG to PING interaction", async () => {
     const request = await makeSignedRequest({ type: 1 });
 
-    const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+    const response = await handleDiscordWebhook(request, mockCtx);
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toEqual({ type: 1 }); // PONG
@@ -120,7 +126,7 @@ describe("handleDiscordWebhook", () => {
   it("returns 400 for unknown interaction type", async () => {
     const request = await makeSignedRequest({ type: 999 });
 
-    const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+    const response = await handleDiscordWebhook(request, mockCtx);
     expect(response.status).toBe(400);
   });
 
@@ -140,21 +146,19 @@ describe("handleDiscordWebhook", () => {
       },
     });
 
-    const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+    const response = await handleDiscordWebhook(request, mockCtx);
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toEqual({ type: 5 });
 
     await Promise.all(waitUntilPromises);
 
-    const workflowCreate = (mockEnv.ASK_WORKFLOW as any).create;
-    expect(workflowCreate).toHaveBeenCalledOnce();
-    expect(workflowCreate).toHaveBeenCalledWith({
+    expect(mockWorkflowCreate).toHaveBeenCalledOnce();
+    expect(mockWorkflowCreate).toHaveBeenCalledWith({
       id: "interaction-1",
       params: {
         question: "What is Ruby?",
         interactionToken: "test-token",
-        applicationId: TEST_APP_ID,
         locale: "zh-TW",
         userId: "user1",
       },
@@ -162,76 +166,54 @@ describe("handleDiscordWebhook", () => {
   });
 
   it("patches error message and does not start workflow when question is missing", async () => {
-    const mockFetch = vi.fn().mockResolvedValue(new Response("ok"));
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = mockFetch;
+    const request = await makeSignedRequest({
+      type: 2,
+      id: "interaction-2",
+      token: "test-token-2",
+      data: { name: "ask" },
+      guild_id: "guild1",
+      channel_id: "channel1",
+      member: {
+        user: { id: "user1", username: "testuser" },
+      },
+    });
 
-    try {
+    const response = await handleDiscordWebhook(request, mockCtx);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({ type: 5 });
+
+    await Promise.all(waitUntilPromises);
+
+    expect(mockWorkflowCreate).not.toHaveBeenCalled();
+
+    expect(mockPatchDiscordResponse).toHaveBeenCalledOnce();
+    const [token, payload] = mockPatchDiscordResponse.mock.calls[0]!;
+    expect(token).toBe("test-token-2");
+    expect(payload.content).toContain("Please provide a question");
+  });
+
+  describe("MessageComponent interactions (feedback)", () => {
+    it("returns UpdateMessage with empty components and does not call Langfuse without keys", async () => {
       const request = await makeSignedRequest({
-        type: 2,
-        id: "interaction-2",
-        token: "test-token-2",
-        data: { name: "ask" },
-        guild_id: "guild1",
-        channel_id: "channel1",
+        type: 3, // MessageComponent
+        id: "interaction-fb-1",
+        token: "fb-token",
+        data: {
+          component_type: 2,
+          custom_id: "feedback:trace-abc:user1:up",
+        },
         member: {
           user: { id: "user1", username: "testuser" },
         },
       });
 
-      const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+      const response = await handleDiscordWebhook(request, mockCtx);
       expect(response.status).toBe(200);
-      const body = await response.json();
-      expect(body).toEqual({ type: 5 });
-
-      await Promise.all(waitUntilPromises);
-
-      const workflowCreate = (mockEnv.ASK_WORKFLOW as any).create;
-      expect(workflowCreate).not.toHaveBeenCalled();
-
-      expect(mockFetch).toHaveBeenCalledOnce();
-      const [url, opts] = mockFetch.mock.calls[0]!;
-      expect(url).toContain(
-        "/webhooks/test-app-id/test-token-2/messages/@original",
-      );
-      expect(opts.method).toBe("PATCH");
-      const patchBody = JSON.parse(opts.body);
-      expect(patchBody.content).toContain("Please provide a question");
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  describe("MessageComponent interactions (feedback)", () => {
-    it("returns UpdateMessage with empty components and does not call Langfuse without keys", async () => {
-      const mockFetch = vi.fn().mockResolvedValue(new Response("ok"));
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = mockFetch;
-
-      try {
-        const request = await makeSignedRequest({
-          type: 3, // MessageComponent
-          id: "interaction-fb-1",
-          token: "fb-token",
-          data: {
-            component_type: 2,
-            custom_id: "feedback:trace-abc:user1:up",
-          },
-          member: {
-            user: { id: "user1", username: "testuser" },
-          },
-        });
-
-        const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
-        expect(response.status).toBe(200);
-        const body = (await response.json()) as any;
-        expect(body.type).toBe(7); // UpdateMessage
-        expect(body.data.components).toEqual([]);
-        expect(waitUntilPromises).toHaveLength(0);
-        expect(mockFetch).not.toHaveBeenCalled();
-      } finally {
-        globalThis.fetch = originalFetch;
-      }
+      const body = (await response.json()) as any;
+      expect(body.type).toBe(7); // UpdateMessage
+      expect(body.data.components).toEqual([]);
+      expect(waitUntilPromises).toHaveLength(0);
     });
 
     it("returns ephemeral message when non-original user clicks feedback", async () => {
@@ -248,7 +230,7 @@ describe("handleDiscordWebhook", () => {
         },
       });
 
-      const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+      const response = await handleDiscordWebhook(request, mockCtx);
       expect(response.status).toBe(200);
       const body = (await response.json()) as any;
       expect(body.type).toBe(4); // ChannelMessageWithSource
@@ -270,7 +252,7 @@ describe("handleDiscordWebhook", () => {
         },
       });
 
-      const response = await handleDiscordWebhook(request, mockCtx, mockEnv);
+      const response = await handleDiscordWebhook(request, mockCtx);
       expect(response.status).toBe(200);
       const body = (await response.json()) as any;
       expect(body.type).toBe(4); // ChannelMessageWithSource
@@ -278,54 +260,39 @@ describe("handleDiscordWebhook", () => {
     });
 
     it("sends Langfuse score when feedback is valid", async () => {
-      const mockFetch = vi.fn().mockResolvedValue(new Response("ok"));
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = mockFetch;
+      const mockFlush = vi.fn().mockResolvedValue(undefined);
+      const mockCreateScore = vi.fn();
+      mockCreateLangfuseClient.mockReturnValue({
+        createScore: mockCreateScore,
+        flush: mockFlush,
+      });
 
-      const envWithLangfuse = {
-        ...mockEnv,
-        LANGFUSE_PUBLIC_KEY: "pk-test",
-        LANGFUSE_SECRET_KEY: "sk-test",
-        LANGFUSE_BASE_URL: "https://langfuse.test",
-      } as unknown as Env;
+      const request = await makeSignedRequest({
+        type: 3,
+        id: "interaction-fb-4",
+        token: "fb-token-4",
+        data: {
+          component_type: 2,
+          custom_id: "feedback:trace-xyz:user1:down",
+        },
+        member: {
+          user: { id: "user1", username: "testuser" },
+        },
+      });
 
-      try {
-        const request = await makeSignedRequest({
-          type: 3,
-          id: "interaction-fb-4",
-          token: "fb-token-4",
-          data: {
-            component_type: 2,
-            custom_id: "feedback:trace-xyz:user1:down",
-          },
-          member: {
-            user: { id: "user1", username: "testuser" },
-          },
-        });
+      const response = await handleDiscordWebhook(request, mockCtx);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as any;
+      expect(body.type).toBe(7); // UpdateMessage
 
-        const response = await handleDiscordWebhook(
-          request,
-          mockCtx,
-          envWithLangfuse,
-        );
-        expect(response.status).toBe(200);
-        const body = (await response.json()) as any;
-        expect(body.type).toBe(7); // UpdateMessage
+      await Promise.all(waitUntilPromises);
 
-        await Promise.all(waitUntilPromises);
-
-        expect(mockFetch).toHaveBeenCalledOnce();
-        const [url, opts] = mockFetch.mock.calls[0]!;
-        expect(url).toBe("https://langfuse.test/api/public/ingestion");
-        const batchBody = JSON.parse(opts.body);
-        const scoreEvent = batchBody.batch[0];
-        expect(scoreEvent.type).toBe("score-create");
-        expect(scoreEvent.body.traceId).toBe("trace-xyz");
-        expect(scoreEvent.body.name).toBe("user-feedback");
-        expect(scoreEvent.body.value).toBe(0); // down = 0
-      } finally {
-        globalThis.fetch = originalFetch;
-      }
+      expect(mockCreateScore).toHaveBeenCalledWith(
+        "trace-xyz",
+        "user-feedback",
+        0, // down = 0
+      );
+      expect(mockFlush).toHaveBeenCalledOnce();
     });
   });
 });
