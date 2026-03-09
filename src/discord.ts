@@ -6,6 +6,7 @@ import {
   type APIMessageComponentInteraction,
 } from "discord-api-types/v10";
 import { verifyKey } from "discord-interactions";
+import { DEFAULT_LOCALE } from "./agent/prompt";
 import { patchDiscordResponse } from "./discord/api";
 import { handleFeedbackInteraction } from "./discord/feedback";
 import { getStringOption } from "./discord/helpers";
@@ -105,7 +106,7 @@ async function handleAskCommand(
   const interactionId = interaction.id;
   const interactionToken = interaction.token;
   const applicationId = env.DISCORD_APPLICATION_ID;
-  const locale = interaction.locale ?? "zh-TW";
+  const locale = interaction.locale ?? DEFAULT_LOCALE;
   const userId = interaction.member?.user?.id ?? interaction.user?.id ?? "";
 
   if (!question) {

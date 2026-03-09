@@ -10,7 +10,12 @@ export function formatForDiscord(text: string): string {
   });
 
   if (result.length > DISCORD_MAX_CONTENT_LENGTH) {
-    result = `${result.slice(0, DISCORD_MAX_CONTENT_LENGTH - 3)}...`;
+    let truncated = result.slice(0, DISCORD_MAX_CONTENT_LENGTH - 3);
+    const lastCode = truncated.charCodeAt(truncated.length - 1);
+    if (lastCode >= 0xd800 && lastCode <= 0xdbff) {
+      truncated = truncated.slice(0, -1);
+    }
+    result = `${truncated}...`;
   }
 
   return result;

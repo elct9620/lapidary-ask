@@ -11,6 +11,26 @@ import { LangfuseClient } from "../telemetry/client";
 import { LangfuseTracer } from "../telemetry/tracer";
 import { LangfuseTelemetryIntegration } from "../telemetry/integration";
 
+const GUARDRAILS_STEP_CONFIG = {
+  timeout: "1 minute" as const,
+  retries: { limit: 0, delay: "1 second" as const },
+};
+
+const DISCORD_POST_STEP_CONFIG = {
+  timeout: "30 seconds" as const,
+  retries: { limit: 2, delay: "2 seconds" as const },
+};
+
+const LLM_STEP_CONFIG = {
+  timeout: "5 minutes" as const,
+  retries: { limit: 1, delay: "5 seconds" as const },
+};
+
+const FIRE_AND_FORGET_STEP_CONFIG = {
+  timeout: "30 seconds" as const,
+  retries: { limit: 0, delay: "1 second" as const },
+};
+
 export function createTelemetryContext(
   env: Env,
   options?: {
@@ -128,14 +148,14 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
 
     const guardrails = await step.do(
       "check-guardrails",
-      { timeout: "1 minute", retries: { limit: 0, delay: "1 second" } },
+      GUARDRAILS_STEP_CONFIG,
       () => this.checkGuardrailsStep(question, locale),
     );
 
     if (!guardrails.relevant) {
       await step.do(
         "post-guardrails-rejection",
-        { timeout: "30 seconds", retries: { limit: 2, delay: "2 seconds" } },
+        DISCORD_POST_STEP_CONFIG,
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
             content: guardrails.reason,
@@ -147,15 +167,13 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
 
     let answer: string;
     try {
-      answer = await step.do(
-        "ask-llm",
-        { timeout: "5 minutes", retries: { limit: 1, delay: "5 seconds" } },
-        () => this.askLLMStep(question, locale, guardrails.traceId),
+      answer = await step.do("ask-llm", LLM_STEP_CONFIG, () =>
+        this.askLLMStep(question, locale, guardrails.traceId),
       );
     } catch (error) {
       await step.do(
         "report-llm-error",
-        { timeout: "30 seconds", retries: { limit: 0, delay: "1 second" } },
+        FIRE_AND_FORGET_STEP_CONFIG,
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
             content: "LLM processing failed. Please try again later.",
@@ -166,24 +184,20 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     }
 
     try {
-      await step.do(
-        "post-response",
-        { timeout: "30 seconds", retries: { limit: 2, delay: "2 seconds" } },
-        async () => {
-          const content = formatForDiscord(answer);
-          const components = guardrails.traceId
-            ? buildFeedbackButtons(guardrails.traceId, userId)
-            : undefined;
-          await patchDiscordResponse(applicationId, interactionToken, {
-            content,
-            components,
-          });
-        },
-      );
+      await step.do("post-response", DISCORD_POST_STEP_CONFIG, async () => {
+        const content = formatForDiscord(answer);
+        const components = guardrails.traceId
+          ? buildFeedbackButtons(guardrails.traceId, userId)
+          : undefined;
+        await patchDiscordResponse(applicationId, interactionToken, {
+          content,
+          components,
+        });
+      });
     } catch (error) {
       await step.do(
         "report-post-error",
-        { timeout: "30 seconds", retries: { limit: 0, delay: "1 second" } },
+        FIRE_AND_FORGET_STEP_CONFIG,
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
             content: "Failed to post response. Please try again later.",

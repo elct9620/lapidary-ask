@@ -50,6 +50,19 @@ describe("formatForDiscord", () => {
     expect(result.endsWith("...")).toBe(true);
   });
 
+  it("does not split surrogate pairs when truncating", () => {
+    // 🎉 is U+1F389, encoded as a surrogate pair in UTF-16
+    const emoji = "🎉";
+    const filler = "a".repeat(2000 - 3 - 1);
+    // Place emoji right at the truncation boundary
+    const input = filler + emoji + "b".repeat(500);
+    const result = formatForDiscord(input);
+    expect(result.length).toBeLessThanOrEqual(2000);
+    expect(result.endsWith("...")).toBe(true);
+    // Should not contain a lone surrogate
+    expect(result).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
+
   it("does not truncate text at exactly 2000 characters", () => {
     const input = "a".repeat(2000);
     const result = formatForDiscord(input);

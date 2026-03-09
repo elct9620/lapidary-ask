@@ -2,7 +2,7 @@ import { generateText, Output } from "ai";
 import type { TelemetryIntegration } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
-import { getLanguageName } from "./prompt";
+import { getLanguageName, DEFAULT_LOCALE } from "./prompt";
 import { buildTelemetryConfig } from "./telemetry-helpers";
 
 export interface CheckGuardrailsOptions {
@@ -62,7 +62,7 @@ export async function checkGuardrails(
   options: CheckGuardrailsOptions,
 ): Promise<GuardrailsResult> {
   try {
-    const { question, apiKey, locale = "zh-TW", integrations } = options;
+    const { question, apiKey, locale = DEFAULT_LOCALE, integrations } = options;
     const openrouter = createOpenRouter({ apiKey });
 
     const { output } = await generateText({

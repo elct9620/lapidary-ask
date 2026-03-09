@@ -1,6 +1,6 @@
 import { generateText, stepCountIs, type TelemetryIntegration } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { buildSystemPrompt } from "./prompt";
+import { buildSystemPrompt, DEFAULT_LOCALE } from "./prompt";
 import { createTools } from "./tools";
 import { buildTelemetryConfig } from "./telemetry-helpers";
 
@@ -19,7 +19,7 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
     apiKey,
     internalApi,
     internalApiUrl,
-    locale = "zh-TW",
+    locale = DEFAULT_LOCALE,
     integrations,
   } = options;
   const openrouter = createOpenRouter({ apiKey });
