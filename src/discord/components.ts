@@ -4,6 +4,7 @@ import {
   type APIActionRowComponent,
   type APIComponentInMessageActionRow,
 } from "discord-api-types/v10";
+import { buildFeedbackCustomId } from "./feedback";
 
 export function buildFeedbackButtons(
   traceId: string,
@@ -17,13 +18,13 @@ export function buildFeedbackButtons(
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
           label: "👍",
-          custom_id: `feedback:${traceId}:${userId}:up`,
+          custom_id: buildFeedbackCustomId(traceId, userId, "up"),
         },
         {
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
           label: "👎",
-          custom_id: `feedback:${traceId}:${userId}:down`,
+          custom_id: buildFeedbackCustomId(traceId, userId, "down"),
         },
       ],
     },

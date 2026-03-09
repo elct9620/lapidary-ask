@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { buildFeedbackButtons } from "../src/discord/components";
-import { parseFeedbackCustomId } from "../src/discord/feedback";
+import {
+  buildFeedbackCustomId,
+  parseFeedbackCustomId,
+} from "../src/discord/feedback";
 import { ComponentType, ButtonStyle } from "discord-api-types/v10";
 
 describe("buildFeedbackButtons", () => {
@@ -24,6 +27,18 @@ describe("buildFeedbackButtons", () => {
     expect((thumbsDown as any).custom_id).toBe(
       "feedback:trace-123:user-456:down",
     );
+  });
+});
+
+describe("buildFeedbackCustomId", () => {
+  it("produces a parseable custom_id (round-trip)", () => {
+    const customId = buildFeedbackCustomId("trace-1", "user-2", "up");
+    const parsed = parseFeedbackCustomId(customId);
+    expect(parsed).toEqual({
+      traceId: "trace-1",
+      userId: "user-2",
+      direction: "up",
+    });
   });
 });
 

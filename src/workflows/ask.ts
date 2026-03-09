@@ -40,27 +40,28 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   private async checkGuardrailsStep(question: string, locale: string) {
     const tracer = createTracer(this.env);
     let traceId: string | undefined;
+    let integrations: LangfuseTelemetryIntegration[] | undefined;
 
     if (tracer) {
       traceId = tracer.createTrace({
         name: "ask-workflow",
         input: { question, locale },
       });
+      integrations = [
+        new LangfuseTelemetryIntegration({ tracer, skipAgentSpan: true }),
+      ];
+    }
 
-      const guardrailIntegration = new LangfuseTelemetryIntegration({
-        tracer,
-        skipAgentSpan: true,
-      });
+    const startTime = new Date().toISOString();
+    const result = await checkGuardrails({
+      question,
+      apiKey: this.env.OPENROUTER_API_KEY,
+      locale,
+      integrations,
+    });
+    const endTime = new Date().toISOString();
 
-      const startTime = new Date().toISOString();
-      const result = await checkGuardrails({
-        question,
-        apiKey: this.env.OPENROUTER_API_KEY,
-        locale,
-        integrations: [guardrailIntegration],
-      });
-      const endTime = new Date().toISOString();
-
+    if (tracer) {
       tracer.createGuardrail({
         name: "check-guardrails",
         input: question,
@@ -69,15 +70,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         endTime,
       });
       await tracer.flush();
-
-      return { ...result, traceId };
     }
-
-    const result = await checkGuardrails({
-      question,
-      apiKey: this.env.OPENROUTER_API_KEY,
-      locale,
-    });
 
     return { ...result, traceId };
   }

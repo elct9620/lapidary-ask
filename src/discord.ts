@@ -10,41 +10,48 @@ import { patchDiscordResponse } from "./discord/api";
 import { handleFeedbackInteraction } from "./discord/feedback";
 import { getStringOption } from "./discord/helpers";
 
-export async function handleDiscordWebhook(
+async function verifySignature(
   request: Request,
-  ctx: Pick<ExecutionContext, "waitUntil">,
   env: Env,
-): Promise<Response> {
+): Promise<{ valid: true; body: string } | { valid: false }> {
   const bodyBuffer = await request.arrayBuffer();
   const bodyBytes = new Uint8Array(bodyBuffer);
-  const body = new TextDecoder().decode(bodyBytes);
 
   const signature = request.headers.get("x-signature-ed25519");
   const timestamp = request.headers.get("x-signature-timestamp");
 
   if (!(signature && timestamp)) {
-    return new Response("Invalid signature", { status: 401 });
+    return { valid: false };
   }
 
-  let isValid: boolean;
   try {
-    isValid = await verifyKey(
+    const isValid = await verifyKey(
       bodyBytes,
       signature,
       timestamp,
       env.DISCORD_PUBLIC_KEY,
     );
+    if (!isValid) return { valid: false };
   } catch {
-    return new Response("Invalid signature", { status: 401 });
+    return { valid: false };
   }
 
-  if (!isValid) {
+  return { valid: true, body: new TextDecoder().decode(bodyBytes) };
+}
+
+export async function handleDiscordWebhook(
+  request: Request,
+  ctx: Pick<ExecutionContext, "waitUntil">,
+  env: Env,
+): Promise<Response> {
+  const verification = await verifySignature(request, env);
+  if (!verification.valid) {
     return new Response("Invalid signature", { status: 401 });
   }
 
   let interaction: APIInteraction;
   try {
-    interaction = JSON.parse(body) as APIInteraction;
+    interaction = JSON.parse(verification.body) as APIInteraction;
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }

@@ -5,16 +5,28 @@ import {
 } from "discord-api-types/v10";
 import { LangfuseClient } from "../telemetry/client";
 
+export const FEEDBACK_PREFIX = "feedback";
+
+export type FeedbackDirection = "up" | "down";
+
 export interface FeedbackData {
   traceId: string;
   userId: string;
-  direction: "up" | "down";
+  direction: FeedbackDirection;
+}
+
+export function buildFeedbackCustomId(
+  traceId: string,
+  userId: string,
+  direction: FeedbackDirection,
+): string {
+  return `${FEEDBACK_PREFIX}:${traceId}:${userId}:${direction}`;
 }
 
 export function parseFeedbackCustomId(customId: string): FeedbackData | null {
   const parts = customId.split(":");
   if (parts.length !== 4) return null;
-  if (parts[0] !== "feedback") return null;
+  if (parts[0] !== FEEDBACK_PREFIX) return null;
   if (parts[3] !== "up" && parts[3] !== "down") return null;
 
   return {
@@ -29,6 +41,16 @@ export interface FeedbackResult {
   pending?: Promise<void>;
 }
 
+function ephemeralResponse(content: string): Response {
+  return Response.json({
+    type: InteractionResponseType.ChannelMessageWithSource,
+    data: {
+      content,
+      flags: MessageFlags.Ephemeral,
+    },
+  });
+}
+
 export function handleFeedbackInteraction(
   interaction: APIMessageComponentInteraction,
   env: Env,
@@ -36,30 +58,14 @@ export function handleFeedbackInteraction(
   const feedback = parseFeedbackCustomId(interaction.data.custom_id);
 
   if (!feedback) {
-    return {
-      response: Response.json({
-        type: InteractionResponseType.ChannelMessageWithSource,
-        data: {
-          content: "無效的回饋操作。",
-          flags: MessageFlags.Ephemeral,
-        },
-      }),
-    };
+    return { response: ephemeralResponse("無效的回饋操作。") };
   }
 
   const interactingUserId =
     interaction.member?.user?.id ?? interaction.user?.id;
 
   if (interactingUserId !== feedback.userId) {
-    return {
-      response: Response.json({
-        type: InteractionResponseType.ChannelMessageWithSource,
-        data: {
-          content: "只有提問者可以評分。",
-          flags: MessageFlags.Ephemeral,
-        },
-      }),
-    };
+    return { response: ephemeralResponse("只有提問者可以評分。") };
   }
 
   let pending: Promise<void> | undefined;
