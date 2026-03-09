@@ -18,6 +18,7 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 - An LLM-powered assistant that interprets questions and queries the Lapidary Knowledge Graph
 - A read-only interface to Lapidary's (Rubyist, Relationship, Module) knowledge graph
 - LLM call observability via Langfuse, tracking token usage, tool calls, and latency
+- User feedback mechanism (the questioner can rate answer quality with 👍/👎 buttons)
 
 ### IS NOT
 
@@ -27,17 +28,20 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 - A direct database query tool (users never write queries)
 - A source of information about arbitrary Ruby gems or third-party libraries (only Ruby core modules and standard libraries are tracked)
 - A real-time monitoring or alerting system (telemetry is for post-hoc analysis)
+- A multi-user voting system (only the original questioner can rate an answer)
 
 ## User Journeys
 
-| Context                                                | Action                                                               | Outcome                                                                                        |
-| ------------------------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| A member wants to know who maintains a core module     | Types `/ask question: Who maintains the String module?`              | Bot replies with Rubyists who have a Maintenance relationship to the String CoreModule         |
-| A member asks what modules a Rubyist contributes to    | Types `/ask question: What modules does matz contribute to?`         | Bot replies with a list of CoreModules and Stdlibs the Rubyist is connected to                 |
-| A member asks about a standard library                 | Types `/ask question: Who contributes to the json standard library?` | Bot replies with Rubyists connected to the json Stdlib node                                    |
-| A member asks about an arbitrary gem outside Ruby core | Types `/ask question: Who maintains the Rails gem?`                  | Bot replies that it only tracks Ruby core modules and standard libraries, not third-party gems |
-| A member asks an unrelated question                    | Types `/ask question: What is the weather today?`                    | Bot replies that it only answers Ruby core development questions                               |
-| The Knowledge Graph has no matching data               | Types `/ask question: Who maintains the Ractor module?`              | Bot replies that no relationship data was found for this module                                |
+| Context                                                | Action                                                               | Outcome                                                                                          |
+| ------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| A member wants to know who maintains a core module     | Types `/ask question: Who maintains the String module?`              | Bot replies with Rubyists who have a Maintenance relationship to the String CoreModule           |
+| A member asks what modules a Rubyist contributes to    | Types `/ask question: What modules does matz contribute to?`         | Bot replies with a list of CoreModules and Stdlibs the Rubyist is connected to                   |
+| A member asks about a standard library                 | Types `/ask question: Who contributes to the json standard library?` | Bot replies with Rubyists connected to the json Stdlib node                                      |
+| A member asks about an arbitrary gem outside Ruby core | Types `/ask question: Who maintains the Rails gem?`                  | Bot replies that it only tracks Ruby core modules and standard libraries, not third-party gems   |
+| A member asks an unrelated question                    | Types `/ask question: What is the weather today?`                    | Bot replies that it only answers Ruby core development questions                                 |
+| The Knowledge Graph has no matching data               | Types `/ask question: Who maintains the Ractor module?`              | Bot replies that no relationship data was found for this module                                  |
+| The questioner wants to rate an answer                 | Clicks 👍 or 👎 button below the bot's response                      | Button is removed, score is recorded to Langfuse                                                 |
+| A non-questioner tries to rate an answer               | Clicks 👍 or 👎 button on someone else's question                    | Sees an ephemeral message saying only the questioner can rate; buttons remain for the questioner |
 
 ## Behavior
 
@@ -59,7 +63,7 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 3. `AskWorkflow.run()` calls Guardrails to check input relevance
 4. If irrelevant → reply with Guardrails rejection reason, end workflow
 5. If relevant → call `askLLM()` with tools (max 15 steps); TelemetryIntegration collects events during execution
-6. Format response and patch back to Discord (telemetry batch sent to Langfuse within the LLM step)
+6. Format response and patch back to Discord with feedback buttons attached (telemetry batch sent to Langfuse within the LLM step)
 
 ### Guardrails
 
@@ -77,6 +81,43 @@ Before invoking the main LLM, the Workflow runs a lightweight Guardrails check t
 - **Pass** → continue to `askLLM()` processing
 - **Reject** → use the rejection reason from the Guardrails LLM as the response to the user, skip `askLLM()`
 - **API failure** → fail-open (treat as pass), continue to `askLLM()`
+
+### Feedback
+
+After the bot responds with an LLM-generated answer, the message includes feedback buttons so the questioner can rate the answer quality. Feedback buttons are not attached to Guardrails rejection messages.
+
+#### Message Components
+
+| Property     | Value                                                            |
+| ------------ | ---------------------------------------------------------------- |
+| Layout       | One ActionRow containing two Buttons                             |
+| Button style | Secondary                                                        |
+| Buttons      | 👍 "Helpful" / 👎 "Not helpful"                                  |
+| `custom_id`  | `feedback:{traceId}:{userId}:{up\|down}` (max 100 chars)         |
+| Attached to  | The response message patched back to Discord in the Request Flow |
+
+The `traceId` links feedback to the Langfuse trace. The `userId` is the original questioner's Discord user ID, encoded so identity can be verified without external storage.
+
+#### Button Click Handling
+
+Feedback button clicks arrive as `MessageComponent` interactions on the same webhook endpoint. They are handled synchronously within the webhook handler (no Workflow needed):
+
+1. Parse `custom_id` to extract `traceId`, `userId`, and direction (`up`/`down`)
+2. Compare `userId` from `custom_id` with the clicking user's ID from the interaction
+3. **Match** → send a score to Langfuse, respond with `UpdateMessage` removing all components (buttons disappear)
+4. **Mismatch** → respond with an ephemeral message indicating only the questioner can rate; buttons remain unchanged
+
+#### Langfuse Score
+
+| Property   | Value                                    |
+| ---------- | ---------------------------------------- |
+| Event type | `score-create` (via batch ingestion API) |
+| `traceId`  | Extracted from `custom_id`               |
+| `name`     | `user-feedback`                          |
+| `value`    | `1` (👍) or `0` (👎)                     |
+| `dataType` | `NUMERIC`                                |
+
+No additional storage (KV, D1) is required. The `custom_id` encodes all state needed for verification and scoring.
 
 ### LLM Processing
 
@@ -98,11 +139,12 @@ The system uses AI SDK `TelemetryIntegration` lifecycle hooks to collect LLM tel
 
 #### Data Collection
 
-| Langfuse Entity | Granularity               | Data Captured                                    |
-| --------------- | ------------------------- | ------------------------------------------------ |
-| Trace           | One per `/ask` invocation | Question input, final response, locale, duration |
-| Generation      | One per LLM call (step)   | Model, prompt/completion tokens, latency         |
-| Span            | One per tool call         | Tool name, arguments, result, duration           |
+| Langfuse Entity | Granularity               | Data Captured                                      |
+| --------------- | ------------------------- | -------------------------------------------------- |
+| Trace           | One per `/ask` invocation | Question input, final response, locale, duration   |
+| Generation      | One per LLM call (step)   | Model, prompt/completion tokens, latency           |
+| Span            | One per tool call         | Tool name, arguments, result, duration             |
+| Score           | One per feedback click    | User feedback value (1 = helpful, 0 = not helpful) |
 
 #### Lifecycle Mapping
 
@@ -176,6 +218,8 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | Workflow failure (all retries exhausted) | Reply: "LLM processing failed. Please try again later."                             |
 | Langfuse API failure                     | Silently ignored; does not affect user response                                     |
 | Discord interaction timeout (>15 min)    | Response is silently dropped by Discord; no retry                                   |
+| Feedback score submission fails          | Buttons are still removed; Langfuse failure does not affect user experience         |
+| Feedback `custom_id` cannot be parsed    | Respond with ephemeral error message; buttons remain unchanged                      |
 
 ## System Boundaries
 
@@ -218,6 +262,9 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | TelemetryIntegration | AI SDK v6 lifecycle hook interface for collecting telemetry events without OTel dependencies                         |
 | Trace                | A Langfuse entity representing one end-to-end `/ask` invocation                                                      |
 | Generation           | A Langfuse entity representing a single LLM call within a trace, including token usage and latency                   |
+| Score                | A Langfuse entity representing a numeric evaluation attached to a trace (e.g., user feedback)                        |
+| Feedback             | A user-initiated quality rating (👍/👎) on a bot response, recorded as a Langfuse Score                              |
+| Message Component    | A Discord interactive element (e.g., Button) attached to a message, identified by a `custom_id`                      |
 
 ## Runtime
 
