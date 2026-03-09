@@ -36,6 +36,7 @@ export class LangfuseClient {
       type: "score-create",
       timestamp: new Date().toISOString(),
       body: {
+        id: crypto.randomUUID(),
         traceId,
         name,
         value,
@@ -53,7 +54,7 @@ export class LangfuseClient {
     const auth = `Basic ${btoa(`${this.publicKey}:${this.secretKey}`)}`;
 
     try {
-      await fetch(url, {
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -61,6 +62,10 @@ export class LangfuseClient {
         },
         body: JSON.stringify({ batch: this.events }),
       });
+
+      if (!response.ok) {
+        console.warn(`Langfuse flush failed: HTTP ${response.status}`);
+      }
     } catch (error) {
       console.warn("Langfuse flush failed:", error);
     }

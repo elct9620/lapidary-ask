@@ -132,6 +132,48 @@ describe("LangfuseClient", () => {
     expect(fetchSpy).toHaveBeenCalledOnce();
   });
 
+  it("createScore emits score-create with id in body", async () => {
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    client.createScore("trace-123", "user-feedback", 1);
+
+    await client.flush();
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+    const event = body.batch[0];
+    expect(event.type).toBe("score-create");
+    expect(event.body.id).toBeDefined();
+    expect(typeof event.body.id).toBe("string");
+    expect(event.body.traceId).toBe("trace-123");
+    expect(event.body.name).toBe("user-feedback");
+    expect(event.body.value).toBe(1);
+  });
+
+  it("warns on HTTP error response", async () => {
+    fetchSpy.mockResolvedValue(new Response("error", { status: 400 }));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const client = new LangfuseClient({
+      publicKey: "pk-test",
+      secretKey: "sk-test",
+    });
+
+    client.emit({
+      id: "e1",
+      type: "trace-create",
+      timestamp: "2025-01-01T00:00:00.000Z",
+      body: { id: "t1" },
+    });
+
+    await client.flush();
+
+    expect(warnSpy).toHaveBeenCalledWith("Langfuse flush failed: HTTP 400");
+    warnSpy.mockRestore();
+  });
+
   it("warns on fetch failure instead of throwing", async () => {
     fetchSpy.mockRejectedValue(new Error("Network error"));
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

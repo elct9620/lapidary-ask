@@ -77,7 +77,7 @@ export function handleFeedbackInteraction(
     client.createScore(
       feedback.traceId,
       "user-feedback",
-      feedback.direction === "up" ? 1 : 0,
+      feedback.direction === "up" ? 1 : -1,
     );
 
     pending = client.flush();

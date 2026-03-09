@@ -290,7 +290,7 @@ describe("handleDiscordWebhook", () => {
       expect(mockCreateScore).toHaveBeenCalledWith(
         "trace-xyz",
         "user-feedback",
-        0, // down = 0
+        -1, // down = -1
       );
       expect(mockFlush).toHaveBeenCalledOnce();
     });
