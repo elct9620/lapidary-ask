@@ -128,5 +128,8 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
     }
 
     await this.tracer.flush();
+
+    this.pendingToolCalls.clear();
+    this.generationIds.clear();
   };
 }

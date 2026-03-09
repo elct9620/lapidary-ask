@@ -7,9 +7,8 @@ import { askLLM, checkGuardrails } from "../agent";
 import { patchDiscordResponse } from "../discord/api";
 import { buildFeedbackButtons } from "../discord/components";
 import { formatForDiscord } from "../format";
-import { LangfuseClient } from "../telemetry/client";
-import { LangfuseTracer } from "../telemetry/tracer";
-import { LangfuseTelemetryIntegration } from "../telemetry/integration";
+import { t } from "../locale";
+import { createTelemetryContext } from "../telemetry/context";
 
 const GUARDRAILS_STEP_CONFIG = {
   timeout: "1 minute" as const,
@@ -31,46 +30,6 @@ const FIRE_AND_FORGET_STEP_CONFIG = {
   retries: { limit: 0, delay: "1 second" as const },
 };
 
-export function createTelemetryContext(
-  env: Env,
-  options?: {
-    traceId?: string;
-    agentName?: string;
-    skipAgentSpan?: boolean;
-    parentId?: string;
-  },
-): { tracer?: LangfuseTracer; integrations?: LangfuseTelemetryIntegration[] } {
-  if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) {
-    return {};
-  }
-
-  const client = new LangfuseClient({
-    publicKey: env.LANGFUSE_PUBLIC_KEY,
-    secretKey: env.LANGFUSE_SECRET_KEY,
-    baseUrl: env.LANGFUSE_BASE_URL,
-  });
-
-  const tracer = new LangfuseTracer({
-    client,
-    environment: env.ENVIRONMENT,
-  });
-
-  if (options?.traceId) {
-    tracer.setTraceId(options.traceId);
-  }
-
-  const integrations = [
-    new LangfuseTelemetryIntegration({
-      tracer,
-      agentName: options?.agentName,
-      skipAgentSpan: options?.skipAgentSpan,
-      parentId: options?.parentId,
-    }),
-  ];
-
-  return { tracer, integrations };
-}
-
 export interface AskWorkflowParams {
   question: string;
   interactionToken: string;
@@ -87,13 +46,10 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       parentId: guardrailId,
     });
 
-    let traceId: string | undefined;
-    if (tracer) {
-      traceId = tracer.createTrace({
-        name: "ask-workflow",
-        input: { question, locale },
-      });
-    }
+    const traceId = tracer?.createTrace({
+      name: "ask-workflow",
+      input: { question, locale },
+    });
 
     const startTime = new Date().toISOString();
     const result = await checkGuardrails({
@@ -176,7 +132,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         FIRE_AND_FORGET_STEP_CONFIG,
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
-            content: "LLM processing failed. Please try again later.",
+            content: t("llmProcessingFailed", locale),
           });
         },
       );
@@ -200,7 +156,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         FIRE_AND_FORGET_STEP_CONFIG,
         async () => {
           await patchDiscordResponse(applicationId, interactionToken, {
-            content: "Failed to post response. Please try again later.",
+            content: t("postResponseFailed", locale),
           });
         },
       );

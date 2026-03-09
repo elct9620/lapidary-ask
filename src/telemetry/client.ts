@@ -6,6 +6,14 @@ export interface LangfuseClientConfig {
   baseUrl?: string;
 }
 
+export function createLangfuseClient(env: Env): LangfuseClient {
+  return new LangfuseClient({
+    publicKey: env.LANGFUSE_PUBLIC_KEY,
+    secretKey: env.LANGFUSE_SECRET_KEY,
+    baseUrl: env.LANGFUSE_BASE_URL,
+  });
+}
+
 export class LangfuseClient {
   private readonly publicKey: string;
   private readonly secretKey: string;

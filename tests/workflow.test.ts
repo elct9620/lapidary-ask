@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { env, introspectWorkflowInstance } from "cloudflare:test";
-import { createTelemetryContext } from "../src/workflows/ask";
+import { createTelemetryContext } from "../src/telemetry/context";
 
 const workflowParams = {
   question: "Who maintains String?",

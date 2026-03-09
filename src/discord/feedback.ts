@@ -3,7 +3,8 @@ import {
   MessageFlags,
   type APIMessageComponentInteraction,
 } from "discord-api-types/v10";
-import { LangfuseClient } from "../telemetry/client";
+import { t } from "../locale";
+import { createLangfuseClient } from "../telemetry/client";
 
 export const FEEDBACK_PREFIX = "feedback";
 
@@ -55,27 +56,24 @@ export function handleFeedbackInteraction(
   interaction: APIMessageComponentInteraction,
   env: Env,
 ): FeedbackResult {
+  const locale = interaction.locale ?? "zh-TW";
   const feedback = parseFeedbackCustomId(interaction.data.custom_id);
 
   if (!feedback) {
-    return { response: ephemeralResponse("無效的回饋操作。") };
+    return { response: ephemeralResponse(t("invalidFeedback", locale)) };
   }
 
   const interactingUserId =
     interaction.member?.user?.id ?? interaction.user?.id;
 
   if (interactingUserId !== feedback.userId) {
-    return { response: ephemeralResponse("只有提問者可以評分。") };
+    return { response: ephemeralResponse(t("onlyAskerCanRate", locale)) };
   }
 
   let pending: Promise<void> | undefined;
 
   if (env.LANGFUSE_PUBLIC_KEY && env.LANGFUSE_SECRET_KEY) {
-    const client = new LangfuseClient({
-      publicKey: env.LANGFUSE_PUBLIC_KEY,
-      secretKey: env.LANGFUSE_SECRET_KEY,
-      baseUrl: env.LANGFUSE_BASE_URL,
-    });
+    const client = createLangfuseClient(env);
 
     client.createScore(
       feedback.traceId,
