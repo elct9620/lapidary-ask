@@ -42,6 +42,8 @@ async function fetchFromGraph(fetcher: Fetcher, url: string): Promise<unknown> {
   }
 }
 
+export type Tools = ReturnType<typeof createTools>;
+
 export function createTools(fetcher: Fetcher, baseUrl: string) {
   return {
     searchNodes: tool({

@@ -7,7 +7,7 @@ import {
 } from "discord-api-types/v10";
 import { verifyKey } from "discord-interactions";
 import { DEFAULT_LOCALE } from "./agent/prompt";
-import { createContainer } from "./container";
+import { createContainer, type AppContainer } from "./container";
 import { handleFeedbackInteraction } from "./discord/feedback";
 import { getStringOption } from "./discord/helpers";
 
@@ -92,7 +92,7 @@ export async function handleDiscordWebhook(
 
 async function handleApplicationCommand(
   interaction: APIChatInputApplicationCommandInteraction,
-  container: ReturnType<typeof createContainer>,
+  container: AppContainer,
 ): Promise<void> {
   const commandName = interaction.data?.name;
 
@@ -103,7 +103,7 @@ async function handleApplicationCommand(
 
 async function handleAskCommand(
   interaction: APIChatInputApplicationCommandInteraction,
-  container: ReturnType<typeof createContainer>,
+  container: AppContainer,
 ): Promise<void> {
   const question = getStringOption(interaction, "question");
   const interactionId = interaction.id;

@@ -4,7 +4,7 @@ import {
   type APIMessageComponentInteraction,
 } from "discord-api-types/v10";
 import { t } from "../locale";
-import type { Container } from "../container";
+import type { AppContainer } from "../container";
 
 export const FEEDBACK_PREFIX = "feedback";
 
@@ -54,7 +54,7 @@ function ephemeralResponse(content: string): Response {
 
 export function handleFeedbackInteraction(
   interaction: APIMessageComponentInteraction,
-  container: Pick<Container, "createLangfuseClient">,
+  container: Pick<AppContainer, "createLangfuseClient">,
 ): FeedbackResult {
   const locale = interaction.locale ?? "zh-TW";
   const feedback = parseFeedbackCustomId(interaction.data.custom_id);

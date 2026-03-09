@@ -28,4 +28,4 @@ export function createContainer() {
   };
 }
 
-export type Container = ReturnType<typeof createContainer>;
+export type AppContainer = ReturnType<typeof createContainer>;

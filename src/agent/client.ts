@@ -1,13 +1,13 @@
 import { generateText, stepCountIs, type TelemetryIntegration } from "ai";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt, DEFAULT_LOCALE } from "./prompt";
-import { type createTools } from "./tools";
+import type { Tools } from "./tools";
 import { buildTelemetryConfig } from "./telemetry-helpers";
 
 export interface AskLLMOptions {
   question: string;
   openrouter: OpenRouterProvider;
-  tools: ReturnType<typeof createTools>;
+  tools: Tools;
   locale?: string;
   integrations?: TelemetryIntegration[];
 }
