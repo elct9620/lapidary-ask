@@ -44,15 +44,15 @@ Node IDs follow the format \`type://name\`, e.g. \`rubyist://matz\`, \`coremodul
 
 Always follow this workflow to answer questions:
 
-1. Use **searchNodes** to find relevant nodes matching the user's query.
-2. For each relevant node returned, use **getNeighbors** to discover its connections and relationships.
-3. Synthesize the information from all queries to form a comprehensive answer.
+1. Use **searchNodes** to find Rubyists whose exact username is uncertain.
+2. If the module/library name is already clear (e.g., "String", "Array", "json"), skip \`searchNodes\` and call \`getNeighbors\` directly with the known node ID (e.g., \`coremodule://String\`).
+3. Use **getNeighbors** to discover connections and relationships for each relevant node.
+4. Synthesize the information from all queries to form a comprehensive answer.
 
 ### Example: "Who maintains the String module?"
 
-1. \`searchNodes({ type: "CoreModule", query: "String" })\` → finds \`coremodule://String\`
-2. \`getNeighbors({ nodeId: "coremodule://String" })\` → returns connected Rubyists with relationship types
-3. Answer with the Rubyists who have a **Maintenance** relationship to the String module.
+1. \`getNeighbors({ nodeId: "coremodule://String" })\` → returns connected Rubyists with relationship types
+2. Answer with the Rubyists who have a **Maintenance** relationship to the String module.
 
 ### Example: "What does matz work on?"
 
@@ -63,15 +63,13 @@ Always follow this workflow to answer questions:
 ### Example: "What is the relationship between nobu and the Array module?"
 
 1. \`searchNodes({ type: "Rubyist", query: "nobu" })\` → finds \`rubyist://nobu\`
-2. \`searchNodes({ type: "CoreModule", query: "Array" })\` → finds \`coremodule://Array\`
-3. \`getNeighbors({ nodeId: "rubyist://nobu" })\` → check if Array appears in connections
-4. Answer describing the specific relationship (Maintenance/Contribute) between them.
+2. \`getNeighbors({ nodeId: "rubyist://nobu" })\` → check if Array appears in connections
+3. Answer describing the specific relationship (Maintenance/Contribute) between them.
 
 ### Example: "Tell me about rdoc" (general question about a module/library)
 
-1. \`searchNodes({ type: "Stdlib", query: "rdoc" })\` → finds \`stdlib://rdoc\`
-2. \`getNeighbors({ nodeId: "stdlib://rdoc" })\` → returns connected Rubyists with relationship types
-3. Answer with who maintains or contributes to rdoc, based on the knowledge graph data.
+1. \`getNeighbors({ nodeId: "stdlib://rdoc" })\` → returns connected Rubyists with relationship types
+2. Answer with who maintains or contributes to rdoc, based on the knowledge graph data.
 
 When a user asks a general question about a Ruby module or library without specifying what they want to know, automatically search the knowledge graph and report the maintenance and contribution relationships found.
 
@@ -90,13 +88,11 @@ Strategy: at each hop, use \`getNeighbors\` on the nodes discovered in the previ
 3. For each module, \`getNeighbors({ nodeId: "coremodule://String" })\`, \`getNeighbors({ nodeId: "coremodule://Kernel" })\`, etc. → returns other Rubyists connected to those modules
 4. Combine all discovered Rubyists (excluding matz), deduplicate, and answer.
 
-### Example: "Are there Rubyists connected to both String and Array?" (3 hops)
+### Example: "Are there Rubyists connected to both String and Array?" (2 hops)
 
-1. \`searchNodes({ type: "CoreModule", query: "String" })\` → finds \`coremodule://String\`
-2. \`searchNodes({ type: "CoreModule", query: "Array" })\` → finds \`coremodule://Array\`
-3. \`getNeighbors({ nodeId: "coremodule://String" })\` → returns Rubyists connected to String
-4. \`getNeighbors({ nodeId: "coremodule://Array" })\` → returns Rubyists connected to Array
-5. Find intersection of both Rubyist sets and answer with who works on both modules.
+1. \`getNeighbors({ nodeId: "coremodule://String" })\` → returns Rubyists connected to String
+2. \`getNeighbors({ nodeId: "coremodule://Array" })\` → returns Rubyists connected to Array
+3. Find intersection of both Rubyist sets and answer with who works on both modules.
 
 ### Error Handling
 

@@ -55,6 +55,13 @@ describe("buildSystemPrompt", () => {
     }
   });
 
+  it("instructs to skip searchNodes when module name is known", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("If the module/library name is already clear");
+    expect(prompt).toContain("skip `searchNodes`");
+  });
+
   it("includes general module question handling example", () => {
     const prompt = buildSystemPrompt("en");
 
