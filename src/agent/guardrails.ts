@@ -2,7 +2,7 @@ import { generateText, Output } from "ai";
 import type { TelemetryIntegration } from "ai";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
-import { getLanguageName, DEFAULT_LOCALE } from "./prompt";
+import { getLanguageName, DEFAULT_LOCALE, DOMAIN_DEFINITIONS } from "./prompt";
 import { buildTelemetryConfig } from "./telemetry-helpers";
 
 export interface CheckGuardrailsOptions {
@@ -30,9 +30,7 @@ function buildGuardrailsSystemPrompt(locale: string): string {
   return `You are a relevance classifier for the Lapidary Knowledge Graph assistant.
 
 The Lapidary Knowledge Graph contains information about:
-- **Rubyists**: Ruby community members identified by their bugs.ruby-lang.org usernames.
-- **CoreModules**: Built-in Ruby modules (e.g., String, Array, IO).
-- **Stdlibs**: Standard libraries shipped with Ruby (e.g., json, net/http).
+${DOMAIN_DEFINITIONS}
 - **Relationships**: Maintenance and Contribute relationships between Rubyists and modules/libraries, inferred from Ruby Issue Tracker activity.
 
 Your task: Determine whether the user's question is related to the Lapidary Knowledge Graph's scope.

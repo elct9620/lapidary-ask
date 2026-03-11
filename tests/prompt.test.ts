@@ -1,7 +1,60 @@
 import { describe, it, expect } from "vitest";
-import { buildSystemPrompt } from "../src/agent/prompt";
+import {
+  buildSystemPrompt,
+  getLanguageName,
+  DEFAULT_LOCALE,
+} from "../src/agent/prompt";
+
+describe("getLanguageName", () => {
+  it("returns Traditional Chinese for zh-TW", () => {
+    expect(getLanguageName("zh-TW")).toBe("Traditional Chinese (Taiwan)");
+  });
+
+  it("returns Simplified Chinese for zh-CN", () => {
+    expect(getLanguageName("zh-CN")).toBe("Simplified Chinese");
+  });
+
+  it("returns Japanese for ja", () => {
+    expect(getLanguageName("ja")).toBe("Japanese");
+  });
+
+  it("returns English for en", () => {
+    expect(getLanguageName("en")).toBe("English");
+  });
+
+  it("returns English for en-US subtag", () => {
+    expect(getLanguageName("en-US")).toBe("English");
+  });
+
+  it("falls back to Traditional Chinese for unknown locale", () => {
+    expect(getLanguageName("ko")).toBe("Traditional Chinese (Taiwan)");
+  });
+});
+
+describe("DEFAULT_LOCALE", () => {
+  it("is zh-TW", () => {
+    expect(DEFAULT_LOCALE).toBe("zh-TW");
+  });
+});
 
 describe("buildSystemPrompt", () => {
+  it("contains all required sections", () => {
+    const prompt = buildSystemPrompt("en");
+
+    const requiredSections = [
+      "## Data Source",
+      "## Tools",
+      "## Query Workflow",
+      "### Error Handling",
+      "## Response Guidelines",
+      "## Response Language",
+    ];
+
+    for (const section of requiredSections) {
+      expect(prompt).toContain(section);
+    }
+  });
+
   it("includes general module question handling example", () => {
     const prompt = buildSystemPrompt("en");
 
@@ -32,5 +85,11 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt("ja");
 
     expect(prompt).toContain("Japanese");
+  });
+
+  it("uses fallback language for unknown locale", () => {
+    const prompt = buildSystemPrompt("ko");
+
+    expect(prompt).toContain("Traditional Chinese (Taiwan)");
   });
 });

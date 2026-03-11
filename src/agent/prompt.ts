@@ -16,6 +16,10 @@ export function getLanguageName(locale: string): string {
   return "Traditional Chinese (Taiwan)";
 }
 
+export const DOMAIN_DEFINITIONS = `- **Rubyist**: A Ruby community member identified by their bugs.ruby-lang.org username. This does NOT necessarily mean they are a core maintainer.
+- **CoreModule**: A built-in Ruby module (e.g., String, Array, IO).
+- **Stdlib**: A standard library shipped with Ruby (e.g., json, net/http).`;
+
 export function buildSystemPrompt(locale: string): string {
   const language = getLanguageName(locale);
 
@@ -25,9 +29,7 @@ export function buildSystemPrompt(locale: string): string {
 
 The Lapidary Knowledge Graph is built by automatically analyzing Ruby's Issue Tracker (bugs.ruby-lang.org). Relationships between Rubyists and modules are **inferred from issue discussions and contributions**, and may not be fully accurate or complete. All information should be treated as **reference only**.
 
-- **Rubyist**: A Ruby community member identified by their bugs.ruby-lang.org username. This does NOT necessarily mean they are a core maintainer.
-- **CoreModule**: A built-in Ruby module (e.g., String, Array, IO).
-- **Stdlib**: A standard library shipped with Ruby (e.g., json, net/http).
+${DOMAIN_DEFINITIONS}
 
 ## Tools
 
@@ -81,21 +83,22 @@ Some questions require traversing multiple levels of relationships to find the a
 
 Strategy: at each hop, use \`getNeighbors\` on the nodes discovered in the previous hop, then collect and deduplicate the results before proceeding to the next level.
 
-#### Example: "Who co-works with matz?" (2 hops)
+### Example: "Who co-works with matz?" (2 hops)
 
 1. \`searchNodes({ type: "Rubyist", query: "matz" })\` → finds \`rubyist://matz\`
 2. \`getNeighbors({ nodeId: "rubyist://matz" })\` → returns modules matz is connected to (e.g. \`coremodule://String\`, \`coremodule://Kernel\`)
 3. For each module, \`getNeighbors({ nodeId: "coremodule://String" })\`, \`getNeighbors({ nodeId: "coremodule://Kernel" })\`, etc. → returns other Rubyists connected to those modules
 4. Combine all discovered Rubyists (excluding matz), deduplicate, and answer.
 
-#### Example: "Who works on modules related to matz's work?" (2 hops)
+### Example: "Are there Rubyists connected to both String and Array?" (3 hops)
 
-1. \`searchNodes({ type: "Rubyist", query: "matz" })\` → finds \`rubyist://matz\`
-2. \`getNeighbors({ nodeId: "rubyist://matz" })\` → returns modules matz works on
-3. For each module, \`getNeighbors\` → returns other Rubyists working on the same modules
-4. Summarize which Rubyists share modules with matz and through which modules they are connected.
+1. \`searchNodes({ type: "CoreModule", query: "String" })\` → finds \`coremodule://String\`
+2. \`searchNodes({ type: "CoreModule", query: "Array" })\` → finds \`coremodule://Array\`
+3. \`getNeighbors({ nodeId: "coremodule://String" })\` → returns Rubyists connected to String
+4. \`getNeighbors({ nodeId: "coremodule://Array" })\` → returns Rubyists connected to Array
+5. Find intersection of both Rubyist sets and answer with who works on both modules.
 
-## Error Handling
+### Error Handling
 
 - If a tool call fails (e.g., network error, timeout), retry the same call 1-2 times before giving up.
 - If retries still fail, inform the user that the data is temporarily unavailable.
