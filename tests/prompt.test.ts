@@ -16,6 +16,18 @@ describe("buildSystemPrompt", () => {
     );
   });
 
+  it("includes multi-hop query guidance", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("Multi-Hop Queries (Indirect Relationships)");
+  });
+
+  it("includes max traversal depth limit", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("Maximum traversal depth: 3 hops.");
+  });
+
   it("includes the specified response language", () => {
     const prompt = buildSystemPrompt("ja");
 

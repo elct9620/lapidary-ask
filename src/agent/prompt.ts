@@ -73,6 +73,28 @@ Always follow this workflow to answer questions:
 
 When a user asks a general question about a Ruby module or library without specifying what they want to know, automatically search the knowledge graph and report the maintenance and contribution relationships found.
 
+### Multi-Hop Queries (Indirect Relationships)
+
+Some questions require traversing multiple levels of relationships to find the answer. Use multi-hop queries when the user asks about **indirect relationships** such as co-workers, shared modules, or people connected through common modules.
+
+**Maximum traversal depth: 3 hops.** Stop and synthesize results after 3 levels to avoid excessive API calls.
+
+Strategy: at each hop, use \`getNeighbors\` on the nodes discovered in the previous hop, then collect and deduplicate the results before proceeding to the next level.
+
+#### Example: "Who co-works with matz?" (2 hops)
+
+1. \`searchNodes({ type: "Rubyist", query: "matz" })\` → finds \`rubyist://matz\`
+2. \`getNeighbors({ nodeId: "rubyist://matz" })\` → returns modules matz is connected to (e.g. \`coremodule://String\`, \`coremodule://Kernel\`)
+3. For each module, \`getNeighbors({ nodeId: "coremodule://String" })\`, \`getNeighbors({ nodeId: "coremodule://Kernel" })\`, etc. → returns other Rubyists connected to those modules
+4. Combine all discovered Rubyists (excluding matz), deduplicate, and answer.
+
+#### Example: "Who works on modules related to matz's work?" (2 hops)
+
+1. \`searchNodes({ type: "Rubyist", query: "matz" })\` → finds \`rubyist://matz\`
+2. \`getNeighbors({ nodeId: "rubyist://matz" })\` → returns modules matz works on
+3. For each module, \`getNeighbors\` → returns other Rubyists working on the same modules
+4. Summarize which Rubyists share modules with matz and through which modules they are connected.
+
 ## Error Handling
 
 - If a tool call fails (e.g., network error, timeout), retry the same call 1-2 times before giving up.
