@@ -44,10 +44,11 @@ describe("buildSystemPrompt", () => {
     const requiredSections = [
       "## Data Source",
       "## Tools",
+      "## Graph Structure",
       "## Query Planning",
       "## Query Workflow",
       "### Error Handling",
-      "## Response Guidelines",
+      "## Response Format",
       "## Response Language",
     ];
 
@@ -63,10 +64,11 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("skip `searchNodes`");
   });
 
-  it("includes general module question handling example", () => {
+  it("includes stdlib reference in module query example", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain("Tell me about rdoc");
+    expect(prompt).toContain("stdlib://rdoc");
+    expect(prompt).toContain("The same pattern applies to Stdlib nodes");
   });
 
   it("includes guidance for auto-searching on general questions", () => {
@@ -99,7 +101,6 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Rubyist ↔ Stdlib");
     expect(prompt).toMatch(/no direct edge.*Rubyist.*Rubyist/i);
     expect(prompt).toContain("getNeighbors");
-    expect(prompt).toContain("multi-hop");
   });
 
   it("includes multi-hop query guidance", () => {
