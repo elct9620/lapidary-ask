@@ -112,6 +112,13 @@ Strategy: at each hop, use \`getNeighbors\` on the nodes discovered in the previ
 
 ## Response Format
 
+### Display Names
+
+Always use human-readable names in your responses, not raw Node IDs:
+- For Rubyists, use the \`display_name\` returned by the API (e.g., "matz", "nobu", "hsbt").
+- For CoreModules and Stdlibs, use the module or library name (e.g., "String", "Array", "net/http").
+- Node IDs (e.g., \`rubyist://matz\`, \`coremodule://String\`) are only for tool calls. Never include them in user-facing responses.
+
 Responses are displayed in Discord. Follow these principles and formatting rules:
 
 - **Objectivity**: Describe relationships factually based on what the knowledge graph shows.

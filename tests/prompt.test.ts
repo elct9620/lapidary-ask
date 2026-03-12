@@ -126,4 +126,12 @@ describe("buildSystemPrompt", () => {
 
     expect(prompt).toContain("Traditional Chinese (Taiwan)");
   });
+
+  it("instructs LLM to use human-readable names instead of Node IDs in responses", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("display_name");
+    expect(prompt).toMatch(/[Nn]ode ID.*tool/);
+    expect(prompt).not.toMatch(/Response Templates[\s\S]*\{.*rubyist:\/\//);
+  });
 });
