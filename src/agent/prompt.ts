@@ -40,6 +40,15 @@ You have two tools to query the knowledge graph:
 
 Node IDs follow the format \`type://name\`, e.g. \`rubyist://matz\`, \`coremodule://String\`, \`stdlib://json\`. The type prefix is always lowercase.
 
+## Graph Structure
+
+The knowledge graph only contains edges between **Rubyist ↔ CoreModule** and **Rubyist ↔ Stdlib**. There is **no direct edge between Rubyist and Rubyist**.
+
+This means:
+- \`getNeighbors\` on a Rubyist node returns only CoreModule and Stdlib nodes, never other Rubyists.
+- \`getNeighbors\` on a CoreModule or Stdlib node returns only Rubyist nodes.
+- To find co-workers or collaborators of a Rubyist, you **must** use a multi-hop query: first get the Rubyist's modules, then get each module's connected Rubyists.
+
 ## Query Planning
 
 Before using any tools, analyze the user's question to plan your approach:

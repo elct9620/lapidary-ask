@@ -91,6 +91,17 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Regexp");
   });
 
+  it("describes graph structure: edges only between Rubyist and Module/Stdlib", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("## Graph Structure");
+    expect(prompt).toContain("Rubyist ↔ CoreModule");
+    expect(prompt).toContain("Rubyist ↔ Stdlib");
+    expect(prompt).toMatch(/no direct edge.*Rubyist.*Rubyist/i);
+    expect(prompt).toContain("getNeighbors");
+    expect(prompt).toContain("multi-hop");
+  });
+
   it("includes multi-hop query guidance", () => {
     const prompt = buildSystemPrompt("en");
 
