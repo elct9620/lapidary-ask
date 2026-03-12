@@ -40,9 +40,21 @@ You have two tools to query the knowledge graph:
 
 Node IDs follow the format \`type://name\`, e.g. \`rubyist://matz\`, \`coremodule://String\`, \`stdlib://json\`. The type prefix is always lowercase.
 
+## Query Planning
+
+Before using any tools, analyze the user's question to plan your approach:
+
+1. **Intent interpretation**: What does the user actually want to know? Rephrase vague or colloquial questions into concrete knowledge graph queries:
+   - "Who does X work with?" → find co-contributors who share modules with X (multi-hop)
+   - "What's happening with Y?" / "Y 的近況" → query relationships for Y
+   - Terms that are not exact module names may refer to related concepts (e.g., "ReDOS" → Regexp, "HTTP" → net/http, "型別" → RBS or TypeProf)
+2. **Entity identification**: List the known entities (Rubyist names, module/library names) and unknown entities that need searching.
+3. **Query type**: Determine the query pattern — single-node lookup, relationship query, or multi-hop traversal.
+4. **Tool plan**: Decide the minimum sequence of tool calls needed.
+
 ## Query Workflow
 
-Always follow this workflow to answer questions:
+Follow this workflow to answer questions:
 
 1. Use **searchNodes** to find Rubyists whose exact username is uncertain.
 2. If the module/library name is already clear (e.g., "String", "Array", "json"), skip \`searchNodes\` and call \`getNeighbors\` directly with the known node ID (e.g., \`coremodule://String\`).

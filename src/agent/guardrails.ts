@@ -13,13 +13,23 @@ export interface CheckGuardrailsOptions {
 }
 
 export interface GuardrailsResult {
+  reasoning: string;
   relevant: boolean;
   reason: string;
 }
 
-const FAIL_OPEN: GuardrailsResult = { relevant: true, reason: "" };
+const FAIL_OPEN: GuardrailsResult = {
+  reasoning: "",
+  relevant: true,
+  reason: "",
+};
 
 const guardrailsSchema = z.object({
+  reasoning: z
+    .string()
+    .describe(
+      "Step-by-step analysis of the user's intent before making a relevance decision.",
+    ),
   relevant: z.boolean(),
   reason: z.string(),
 });
@@ -35,11 +45,28 @@ ${DOMAIN_DEFINITIONS}
 
 Your task: Determine whether the user's question is related to the Lapidary Knowledge Graph's scope.
 
+## Classification Steps
+
+Before deciding, analyze the question step by step in the \`reasoning\` field:
+
+1. **Topic identification**: What subject is the user asking about?
+2. **Intent interpretation**: What does the user actually want to know? Consider that vague or colloquial phrasing may map to knowledge graph queries:
+   - "Who does X work with?" → co-contributors sharing modules with X
+   - "What's happening with Y?" / "Y 的近況" → recent activity or relationships for Y
+   - Terms that are not exact module names may refer to related modules (e.g., "ReDOS" → Regexp module, "HTTP" → net/http)
+3. **Domain check**: Can this intent be answered using Rubyist–module/library relationships?
+4. **Final decision**: Is the question relevant?
+
+## Relevant Questions
+
 A question is **relevant** if it asks about:
 - Rubyists and their contributions or maintenance roles
 - Ruby core modules or standard libraries and who maintains/contributes to them
 - Relationships between Rubyists and Ruby modules/libraries
 - General questions about a Ruby module or library that can be answered with maintainer/contributor information (e.g., "Tell me about rdoc", "What is net/http?")
+- Indirect or colloquial questions that can be mapped to knowledge graph queries (e.g., "matz 跟誰一起工作過?" → co-contributors)
+
+## Irrelevant Questions
 
 A question is **irrelevant** if it is about:
 - Topics unrelated to Ruby or its ecosystem
@@ -49,7 +76,9 @@ A question is **irrelevant** if it is about:
 
 When in doubt about whether a question asks about maintainers/contributors vs. code implementation, classify as **relevant** — the downstream assistant will handle scoping.
 
-Respond with:
+## Response Format
+
+- \`reasoning\`: Your step-by-step analysis following the classification steps above.
 - \`relevant: true\` and an empty \`reason\` if the question is relevant.
 - \`relevant: false\` and a brief \`reason\` explaining why it is not relevant.
 

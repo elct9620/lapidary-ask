@@ -18,7 +18,11 @@ const mockOpenrouter = vi.fn((model: string) => `model:${model}`) as any;
 describe("checkGuardrails", () => {
   it("returns relevant: true for related questions", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: true, reason: "" },
+      output: {
+        reasoning: "About Ruby maintainers",
+        relevant: true,
+        reason: "",
+      },
     } as Awaited<ReturnType<typeof generateText>>);
 
     const result = await checkGuardrails({
@@ -26,12 +30,17 @@ describe("checkGuardrails", () => {
       openrouter: mockOpenrouter,
     });
 
-    expect(result).toEqual({ relevant: true, reason: "" });
+    expect(result).toEqual({
+      reasoning: "About Ruby maintainers",
+      relevant: true,
+      reason: "",
+    });
   });
 
   it("returns relevant: false with reason for unrelated questions", async () => {
     mockedGenerateText.mockResolvedValue({
       output: {
+        reasoning: "This is about cooking, not Ruby",
         relevant: false,
         reason: "This question is about cooking, not Ruby.",
       },
@@ -43,6 +52,7 @@ describe("checkGuardrails", () => {
     });
 
     expect(result).toEqual({
+      reasoning: "This is about cooking, not Ruby",
       relevant: false,
       reason: "This question is about cooking, not Ruby.",
     });
@@ -56,7 +66,7 @@ describe("checkGuardrails", () => {
       openrouter: mockOpenrouter,
     });
 
-    expect(result).toEqual({ relevant: true, reason: "" });
+    expect(result).toEqual({ reasoning: "", relevant: true, reason: "" });
   });
 
   it("fail-opens when output is null", async () => {
@@ -69,12 +79,12 @@ describe("checkGuardrails", () => {
       openrouter: mockOpenrouter,
     });
 
-    expect(result).toEqual({ relevant: true, reason: "" });
+    expect(result).toEqual({ reasoning: "", relevant: true, reason: "" });
   });
 
   it("includes language instruction in system prompt when locale is provided", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: false, reason: "..." },
+      output: { reasoning: "...", relevant: false, reason: "..." },
     } as Awaited<ReturnType<typeof generateText>>);
 
     await checkGuardrails({
@@ -92,7 +102,7 @@ describe("checkGuardrails", () => {
 
   it("uses default locale zh-TW when locale is not provided", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: true, reason: "" },
+      output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
 
     await checkGuardrails({
@@ -109,7 +119,7 @@ describe("checkGuardrails", () => {
 
   it("passes correct parameters to generateText", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: true, reason: "" },
+      output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
 
     await checkGuardrails({
@@ -129,7 +139,7 @@ describe("checkGuardrails", () => {
 
   it("passes integrations to generateText when provided", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: true, reason: "" },
+      output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
 
     const mockIntegration = { flush: vi.fn().mockResolvedValue(undefined) };
@@ -152,7 +162,7 @@ describe("checkGuardrails", () => {
 
   it("system prompt includes lenient classification guidance for borderline questions", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: true, reason: "" },
+      output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
 
     await checkGuardrails({
@@ -169,7 +179,7 @@ describe("checkGuardrails", () => {
 
   it("system prompt includes general module question examples as relevant", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: true, reason: "" },
+      output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
 
     await checkGuardrails({
@@ -186,7 +196,11 @@ describe("checkGuardrails", () => {
 
   it("system prompt explicitly rejects code implementation requests", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: false, reason: "Code implementation request" },
+      output: {
+        reasoning: "...",
+        relevant: false,
+        reason: "Code implementation request",
+      },
     } as Awaited<ReturnType<typeof generateText>>);
 
     await checkGuardrails({
@@ -203,9 +217,64 @@ describe("checkGuardrails", () => {
     );
   });
 
+  it("system prompt includes step-by-step classification instructions", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { reasoning: "...", relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "matz 跟誰一起工作過?",
+      openrouter: mockOpenrouter,
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("Classification Steps"),
+      }),
+    );
+  });
+
+  it("system prompt includes intent interpretation examples for ambiguous queries", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { reasoning: "...", relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "redos 的近況",
+      openrouter: mockOpenrouter,
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("co-contributors sharing modules"),
+      }),
+    );
+  });
+
+  it("schema includes reasoning field for CoT analysis", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: {
+        reasoning: "The user asks about ReDOS which relates to Regexp module",
+        relevant: true,
+        reason: "",
+      },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    const result = await checkGuardrails({
+      question: "redos 的近況",
+      openrouter: mockOpenrouter,
+    });
+
+    expect(result).toEqual({
+      reasoning: "The user asks about ReDOS which relates to Regexp module",
+      relevant: true,
+      reason: "",
+    });
+  });
+
   it("does not include experimental_telemetry when no integrations", async () => {
     mockedGenerateText.mockResolvedValue({
-      output: { relevant: true, reason: "" },
+      output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
 
     await checkGuardrails({

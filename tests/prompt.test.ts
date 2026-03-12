@@ -44,6 +44,7 @@ describe("buildSystemPrompt", () => {
     const requiredSections = [
       "## Data Source",
       "## Tools",
+      "## Query Planning",
       "## Query Workflow",
       "### Error Handling",
       "## Response Guidelines",
@@ -74,6 +75,20 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain(
       "When a user asks a general question about a Ruby module or library",
     );
+  });
+
+  it("includes query planning section", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("## Query Planning");
+  });
+
+  it("includes intent interpretation guidance for ambiguous queries", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("Intent interpretation");
+    expect(prompt).toContain("ReDOS");
+    expect(prompt).toContain("Regexp");
   });
 
   it("includes multi-hop query guidance", () => {
