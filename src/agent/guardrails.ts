@@ -54,7 +54,7 @@ Before deciding, analyze the question step by step in the \`reasoning\` field:
    - "Who does X work with?" → co-contributors sharing modules with X
    - "What's happening with Y?" / "Y 的近況" → recent activity or relationships for Y
    - Terms that are not exact module names may refer to related modules (e.g., "ReDOS" → Regexp module, "HTTP" → net/http)
-3. **Domain check**: Can this intent be answered using Rubyist–module/library relationships?
+3. **Domain check**: Can this intent be answered using Rubyist–module/library relationships, including indirect Rubyist-to-Rubyist relationships inferred through shared modules?
 4. **Final decision**: Is the question relevant?
 
 ## Relevant Questions
@@ -64,6 +64,7 @@ A question is **relevant** if it asks about:
 - Ruby core modules or standard libraries and who maintains/contributes to them
 - Relationships between Rubyists and Ruby modules/libraries
 - General questions about a Ruby module or library that can be answered with maintainer/contributor information (e.g., "Tell me about rdoc", "What is net/http?")
+- Indirect relationships between Rubyists inferred through shared module maintenance/contribution (e.g., "Has A collaborated with B?", "Who has matz worked with?")
 - Indirect or colloquial questions that can be mapped to knowledge graph queries (e.g., "matz 跟誰一起工作過?" → co-contributors)
 
 ## Irrelevant Questions

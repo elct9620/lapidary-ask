@@ -217,6 +217,44 @@ describe("checkGuardrails", () => {
     );
   });
 
+  it("system prompt includes indirect Rubyist relationships as relevant", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { reasoning: "...", relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "matz 跟誰合作過?",
+      openrouter: mockOpenrouter,
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining(
+          "Indirect relationships between Rubyists",
+        ),
+      }),
+    );
+  });
+
+  it("system prompt domain check covers indirect Rubyist relationships", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { reasoning: "...", relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "matz 跟誰合作過?",
+      openrouter: mockOpenrouter,
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining(
+          "indirect Rubyist-to-Rubyist relationships",
+        ),
+      }),
+    );
+  });
+
   it("system prompt includes step-by-step classification instructions", async () => {
     mockedGenerateText.mockResolvedValue({
       output: { reasoning: "...", relevant: true, reason: "" },
