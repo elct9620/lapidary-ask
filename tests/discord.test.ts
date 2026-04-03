@@ -193,6 +193,39 @@ describe("handleDiscordWebhook", () => {
     expect(payload.content).toContain("Please provide a question");
   });
 
+  it("patches error message when workflow creation fails", async () => {
+    mockWorkflowCreate.mockRejectedValueOnce(new Error("Workflow unavailable"));
+
+    const request = await makeSignedRequest({
+      type: 2,
+      id: "interaction-fail",
+      token: "test-token-fail",
+      data: {
+        name: "ask",
+        options: [
+          { name: "question", type: 3, value: "Who maintains String?" },
+        ],
+      },
+      guild_id: "guild1",
+      channel_id: "channel1",
+      member: {
+        user: { id: "user1", username: "testuser" },
+      },
+    });
+
+    const response = await handleDiscordWebhook(request, mockCtx);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({ type: 5 });
+
+    await Promise.all(waitUntilPromises);
+
+    expect(mockPatchDiscordResponse).toHaveBeenCalledOnce();
+    const [token, payload] = mockPatchDiscordResponse.mock.calls[0]!;
+    expect(token).toBe("test-token-fail");
+    expect(payload.content).toContain("LLM");
+  });
+
   describe("MessageComponent interactions (feedback)", () => {
     it("returns UpdateMessage with empty components and does not call Langfuse without keys", async () => {
       const request = await makeSignedRequest({

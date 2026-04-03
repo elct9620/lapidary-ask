@@ -194,12 +194,12 @@ The system uses AI SDK `TelemetryIntegration` lifecycle hooks to collect LLM tel
 
 #### Data Collection
 
-| Langfuse Entity | Granularity               | Data Captured                                      |
-| --------------- | ------------------------- | -------------------------------------------------- |
-| Trace           | One per `/ask` invocation | Question input, final response, locale, duration   |
-| Generation      | One per LLM call (step)   | Model, prompt/completion tokens, latency           |
-| Span            | One per tool call         | Tool name, arguments, result, duration             |
-| Score           | One per feedback click    | User feedback value (1 = helpful, 0 = not helpful) |
+| Langfuse Entity | Granularity               | Data Captured                                       |
+| --------------- | ------------------------- | --------------------------------------------------- |
+| Trace           | One per `/ask` invocation | Question input, final response, locale, duration    |
+| Generation      | One per LLM call (step)   | Model, prompt/completion tokens, latency            |
+| Span            | One per tool call         | Tool name, arguments, result, duration              |
+| Score           | One per feedback click    | User feedback value (1 = helpful, -1 = not helpful) |
 
 #### Lifecycle Mapping
 
@@ -245,7 +245,7 @@ The Knowledge Graph contains three node types and two relationship types:
 | Tool           | Purpose                                                                             | Parameters                                                                      | Maps to Lapidary API   |
 | -------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------- |
 | `searchNodes`  | Search nodes by type and keyword                                                    | `type?: "Rubyist" \| "CoreModule" \| "Stdlib"`, `query?: string`                | `GET /graph/nodes`     |
-| `getNeighbors` | Get all nodes connected to a given node in both directions with their relationships | `nodeId: string` (e.g., `Rubyist://matz`); always queries with `direction=both` | `GET /graph/neighbors` |
+| `getNeighbors` | Get all nodes connected to a given node in both directions with their relationships | `nodeId: string` (e.g., `rubyist://matz`); always queries with `direction=both` | `GET /graph/neighbors` |
 
 Each tool returns structured data that the LLM formats into a Markdown response.
 
@@ -273,6 +273,8 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | LLM reaches max steps (15)               | Return the response generated so far; not treated as an error                                                                              |
 | LLM returns empty response               | Reply: "No response."                                                                                                                      |
 | Discord response post failure            | Workflow retries the response step up to 2 times before giving up                                                                          |
+| Discord response post failure (fallback) | Reply: localized error message indicating response delivery failed                                                                         |
+| Workflow creation failure                | Reply: localized error message indicating LLM processing failed                                                                            |
 | Workflow failure (all retries exhausted) | Reply: "LLM processing failed. Please try again later."                                                                                    |
 | Langfuse API failure                     | Silently ignored; does not affect user response                                                                                            |
 | Discord interaction timeout (>15 min)    | Response is silently dropped by Discord; no retry                                                                                          |

@@ -10,6 +10,7 @@ import { DEFAULT_LOCALE } from "./agent/prompt";
 import { createContainer, type AppContainer } from "./container";
 import { handleFeedbackInteraction } from "./discord/feedback";
 import { getStringOption } from "./discord/helpers";
+import { t } from "./locale";
 
 async function verifySignature(
   request: Request,
@@ -118,13 +119,19 @@ async function handleAskCommand(
     return;
   }
 
-  await container.askWorkflow.create({
-    id: interactionId,
-    params: {
-      question,
-      interactionToken,
-      locale,
-      userId,
-    },
-  });
+  try {
+    await container.askWorkflow.create({
+      id: interactionId,
+      params: {
+        question,
+        interactionToken,
+        locale,
+        userId,
+      },
+    });
+  } catch {
+    await container.patchDiscordResponse(interactionToken, {
+      content: t("llmProcessingFailed", locale),
+    });
+  }
 }

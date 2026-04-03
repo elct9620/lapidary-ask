@@ -5,7 +5,10 @@ import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { getLanguageName, DEFAULT_LOCALE, DOMAIN_DEFINITIONS } from "./prompt";
 import { buildTelemetryConfig } from "./telemetry-helpers";
-import { DEFAULT_AI_STUDIO_MODEL, DEFAULT_OPENROUTER_MODEL } from "../models";
+import {
+  DEFAULT_AI_STUDIO_GUARD_MODEL,
+  DEFAULT_OPENROUTER_GUARD_MODEL,
+} from "../models";
 
 export interface CheckGuardrailsOptions {
   question: string;
@@ -116,8 +119,8 @@ export async function checkGuardrails(
       question,
       openrouter,
       google,
-      openrouterModel = DEFAULT_OPENROUTER_MODEL,
-      aiStudioModel = DEFAULT_AI_STUDIO_MODEL,
+      openrouterModel = DEFAULT_OPENROUTER_GUARD_MODEL,
+      aiStudioModel = DEFAULT_AI_STUDIO_GUARD_MODEL,
       locale = DEFAULT_LOCALE,
       integrations,
     } = options;

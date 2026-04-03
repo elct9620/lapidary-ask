@@ -5,7 +5,12 @@ import { createTools } from "./agent/tools";
 import { patchDiscordResponse } from "./discord/api";
 import { createTelemetryContext } from "./telemetry/context";
 import { createLangfuseClient } from "./telemetry/client";
-import { DEFAULT_AI_STUDIO_MODEL, DEFAULT_OPENROUTER_MODEL } from "./models";
+import {
+  DEFAULT_AI_STUDIO_ASK_MODEL,
+  DEFAULT_AI_STUDIO_GUARD_MODEL,
+  DEFAULT_OPENROUTER_ASK_MODEL,
+  DEFAULT_OPENROUTER_GUARD_MODEL,
+} from "./models";
 
 export interface ModelConfig {
   aiStudioAskModel: string;
@@ -21,11 +26,13 @@ export function createContainer() {
     : undefined;
   const tools = createTools(env.INTERNAL_API, env.INTERNAL_API_URL);
   const modelConfig: ModelConfig = {
-    aiStudioAskModel: env.AI_STUDIO_ASK_MODEL || DEFAULT_AI_STUDIO_MODEL,
-    aiStudioGuardModel: env.AI_STUDIO_GUARD_MODEL || DEFAULT_AI_STUDIO_MODEL,
-    openrouterAskModel: env.OPENROUTER_ASK_MODEL || DEFAULT_OPENROUTER_MODEL,
+    aiStudioAskModel: env.AI_STUDIO_ASK_MODEL || DEFAULT_AI_STUDIO_ASK_MODEL,
+    aiStudioGuardModel:
+      env.AI_STUDIO_GUARD_MODEL || DEFAULT_AI_STUDIO_GUARD_MODEL,
+    openrouterAskModel:
+      env.OPENROUTER_ASK_MODEL || DEFAULT_OPENROUTER_ASK_MODEL,
     openrouterGuardModel:
-      env.OPENROUTER_GUARD_MODEL || DEFAULT_OPENROUTER_MODEL,
+      env.OPENROUTER_GUARD_MODEL || DEFAULT_OPENROUTER_GUARD_MODEL,
   };
 
   return {
