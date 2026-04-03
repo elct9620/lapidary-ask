@@ -131,13 +131,13 @@ After the bot responds with an LLM-generated answer, the message includes feedba
 
 #### Message Components
 
-| Property     | Value                                                            |
-| ------------ | ---------------------------------------------------------------- |
-| Layout       | One ActionRow containing two Buttons                             |
-| Button style | Secondary                                                        |
-| Buttons      | 👍 "Helpful" / 👎 "Not helpful"                                  |
-| `custom_id`  | `feedback:{traceId}:{userId}:{up\|down}` (max 100 chars)         |
-| Attached to  | The response message patched back to Discord in the Request Flow |
+| Property     | Value                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Layout       | One ActionRow containing two Buttons                                                                                     |
+| Button style | Secondary                                                                                                                |
+| Buttons      | 👍 "Helpful" / 👎 "Not helpful"                                                                                          |
+| `custom_id`  | `feedback:{traceId}:{userId}:{up\|down}` (max 100 chars; `traceId` must be truncated if needed to fit within this limit) |
+| Attached to  | The response message patched back to Discord in the Request Flow                                                         |
 
 The `traceId` links feedback to the Langfuse trace. The `userId` is the original questioner's Discord user ID, encoded so identity can be verified without external storage.
 
@@ -283,6 +283,17 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 
 Retry intervals within Workflow steps are implementation details; only retry counts are specified.
 
+### Retry Strategy
+
+Each Workflow step specifies its own retry count. Retry intervals are implementation details.
+
+| Step              | Retry Count | Notes                                                  |
+| ----------------- | ----------- | ------------------------------------------------------ |
+| Guardrails        | 0           | Provider fallback handles failures within the step     |
+| LLM Processing    | 1           | Restarts from primary provider on retry                |
+| Discord Response  | 2           | Retries on Discord API failure                         |
+| Telemetry (batch) | 0           | Fire-and-forget; failure does not affect user response |
+
 ## System Boundaries
 
 | Boundary               | Protocol                                            | Auth                                 |
@@ -311,6 +322,7 @@ Retry intervals within Workflow steps are implementation details; only retry cou
 | `LANGFUSE_PUBLIC_KEY`    | Secret          | Langfuse API authentication (public key)                                                        |
 | `LANGFUSE_SECRET_KEY`    | Secret          | Langfuse API authentication (secret key)                                                        |
 | `LANGFUSE_BASE_URL`      | Variable        | Langfuse API base URL (default: `https://cloud.langfuse.com`)                                   |
+| `ENVIRONMENT`            | Variable        | Environment name for telemetry tags (e.g., `production`)                                        |
 | `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow for async LLM processing                                                    |
 
 ## Terminology
