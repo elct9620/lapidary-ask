@@ -18,6 +18,16 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 | Exploring Rubyist contributions | Browse issue tracker threads one by one          | Query the Knowledge Graph for a Rubyist's connected modules in one step    |
 | Accessing Knowledge Graph data  | Requires direct API access or database knowledge | Available to any Discord community member via `/ask`                       |
 
+## Success Criteria
+
+| Criterion                                                      | Verification Method                           |
+| -------------------------------------------------------------- | --------------------------------------------- |
+| Response delivered within Discord interaction timeout (15 min) | Langfuse trace duration                       |
+| Relevant questions receive Knowledge Graph data-backed answers | Langfuse trace shows tool calls with results  |
+| Irrelevant questions are declined by Guardrails with a reason  | Guardrails rejection logged in trace          |
+| Answer quality is trackable via user feedback                  | Langfuse Scores recorded from 👍/👎 buttons   |
+| Telemetry failures do not block or degrade the user response   | Response delivered even when Langfuse is down |
+
 ## Scope
 
 ### IS
@@ -60,7 +70,7 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 | Command name        | `ask`                                                                    |
 | Option              | `question` (string, required)                                            |
 | Response visibility | Visible to the entire channel                                            |
-| Response format     | Markdown                                                                 |
+| Response format     | Markdown (GFM tables wrapped in code blocks for Discord rendering)       |
 | Maximum LLM steps   | 15; when reached, returns the response generated so far (no error)       |
 | Max response length | 2000 characters (Discord limit); truncated with `...` suffix if exceeded |
 
@@ -268,6 +278,10 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | Discord interaction timeout (>15 min)    | Response is silently dropped by Discord; no retry                                                                                          |
 | Feedback score submission fails          | Buttons are still removed; Langfuse failure does not affect user experience                                                                |
 | Feedback `custom_id` cannot be parsed    | Respond with ephemeral error message; buttons remain unchanged                                                                             |
+| Feedback button clicked after removal    | Not reachable; buttons are removed on first valid click via `UpdateMessage`                                                                |
+| Question exceeds input length            | Constrained by Discord slash command option limits; no additional validation required                                                      |
+
+Retry intervals within Workflow steps are implementation details; only retry counts are specified.
 
 ## System Boundaries
 
