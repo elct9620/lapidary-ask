@@ -6,10 +6,10 @@ import {
 export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
   {
     name: "ask",
-    description: "Ask the Lapidary Knowledge Graph via OpenRouter Free Models",
+    description: "Ask the Lapidary Knowledge Graph a question",
     description_localizations: {
-      "zh-TW": "透過 OpenRouter Free Models 查詢 Lapidary 知識圖譜",
-      ja: "OpenRouter Free Models を使って Lapidary Knowledge Graph に質問する",
+      "zh-TW": "向 Lapidary 知識圖譜提問",
+      ja: "Lapidary Knowledge Graph に質問する",
     },
     options: [
       {
