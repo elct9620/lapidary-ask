@@ -25,7 +25,7 @@ export function buildFeedbackCustomId(
 ): string {
   const fixedLength =
     FEEDBACK_PREFIX.length + 1 + 1 + userId.length + 1 + direction.length;
-  const maxTraceIdLength = CUSTOM_ID_MAX_LENGTH - fixedLength;
+  const maxTraceIdLength = Math.max(0, CUSTOM_ID_MAX_LENGTH - fixedLength);
   const truncatedTraceId = traceId.slice(0, maxTraceIdLength);
   return `${FEEDBACK_PREFIX}:${truncatedTraceId}:${userId}:${direction}`;
 }

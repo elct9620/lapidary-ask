@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildFeedbackButtons } from "../src/discord/components";
 import {
+  FEEDBACK_PREFIX,
   buildFeedbackCustomId,
   parseFeedbackCustomId,
 } from "../src/discord/feedback";
@@ -68,8 +69,10 @@ describe("buildFeedbackCustomId truncation", () => {
     expect(parsed).not.toBeNull();
     expect(parsed!.userId).toBe(userId);
     expect(parsed!.direction).toBe("down");
+    const fixedPartLength =
+      FEEDBACK_PREFIX.length + 1 + 1 + userId.length + 1 + "down".length;
     expect(parsed!.traceId).toBe(
-      longTraceId.slice(0, customId.length - "feedback::user-456:down".length),
+      longTraceId.slice(0, customId.length - fixedPartLength),
     );
   });
 });
