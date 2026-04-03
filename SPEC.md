@@ -65,14 +65,35 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 5. If relevant → call `askLLM()` with tools (max 15 steps); TelemetryIntegration collects events during execution
 6. Format response and patch back to Discord with feedback buttons attached (telemetry batch sent to Langfuse within the LLM step)
 
+### LLM Provider Strategy
+
+Both Guardrails and LLM Processing use a dual-provider strategy with automatic fallback.
+
+| Property          | Value                                                        |
+| ----------------- | ------------------------------------------------------------ |
+| Primary provider  | Google AI Studio                                             |
+| Fallback provider | OpenRouter                                                   |
+| Applies to        | Guardrails and LLM Processing                                |
+| Fallback trigger  | API error (4xx/5xx) or network failure from primary provider |
+| Fallback behavior | Retry the same call once using the fallback provider         |
+
+Model selection is configured per provider and per function via environment variables:
+
+| Binding                  | Purpose                                            |
+| ------------------------ | -------------------------------------------------- |
+| `AI_STUDIO_GUARD_MODEL`  | Model for Guardrails via AI Studio                 |
+| `AI_STUDIO_ASK_MODEL`    | Model for LLM Processing via AI Studio             |
+| `OPENROUTER_GUARD_MODEL` | Model for Guardrails via OpenRouter (fallback)     |
+| `OPENROUTER_ASK_MODEL`   | Model for LLM Processing via OpenRouter (fallback) |
+
 ### Guardrails
 
 Before invoking the main LLM, the Workflow runs a lightweight Guardrails check to determine whether the user's question is related to querying the Lapidary Knowledge Graph (Ruby core development, Rubyists, core modules, standard libraries).
 
 | Property | Value                                                                   |
 | -------- | ----------------------------------------------------------------------- |
-| Provider | OpenRouter                                                              |
-| Model    | `openrouter/free`                                                       |
+| Provider | Primary provider (AI Studio), with fallback to OpenRouter               |
+| Model    | Configured via `AI_STUDIO_GUARD_MODEL` / `OPENROUTER_GUARD_MODEL`       |
 | Purpose  | Determine whether the input is relevant to the Lapidary Knowledge Graph |
 | Output   | Pass (relevant) or Reject (irrelevant, with reason)                     |
 
@@ -80,7 +101,7 @@ Before invoking the main LLM, the Workflow runs a lightweight Guardrails check t
 
 - **Pass** → continue to `askLLM()` processing
 - **Reject** → use the rejection reason from the Guardrails LLM as the response to the user, skip `askLLM()`
-- **API failure** → fail-open (treat as pass), continue to `askLLM()`
+- **Primary provider failure** → retry with fallback provider; if both fail → fail-open (treat as pass), continue to `askLLM()`
 
 ### Feedback
 
@@ -121,15 +142,15 @@ No additional storage (KV, D1) is required. The `custom_id` encodes all state ne
 
 ### LLM Processing
 
-The system uses OpenRouter to access free-tier LLM models via the Vercel AI SDK (`ai` package).
+The system uses the Vercel AI SDK (`ai` package) to call LLM models, with Google AI Studio as the primary provider and OpenRouter as fallback.
 
-| Property               | Value                                |
-| ---------------------- | ------------------------------------ |
-| Provider               | OpenRouter                           |
-| Model                  | `openrouter/free`                    |
-| System prompt language | English                              |
-| Tool calling           | Enabled, up to 15 steps              |
-| Response language      | Matches the user's question language |
+| Property               | Value                                                   |
+| ---------------------- | ------------------------------------------------------- |
+| Primary provider       | Google AI Studio (configured via `AI_STUDIO_ASK_MODEL`) |
+| Fallback provider      | OpenRouter (configured via `OPENROUTER_ASK_MODEL`)      |
+| System prompt language | English                                                 |
+| Tool calling           | Enabled, up to 15 steps                                 |
+| Response language      | Matches the user's question language                    |
 
 The LLM receives the user's question and a set of tools for querying the Lapidary Knowledge Graph. It decides autonomously which tools to invoke (if any) and synthesizes results into a human-readable answer.
 
@@ -206,29 +227,30 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 
 ### Error Handling
 
-| Scenario                                 | Behavior                                                                            |
-| ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| Missing `question` option                | Reply: "Please provide a question."                                                 |
-| Guardrails rejects input                 | Reply with the rejection reason generated by the Guardrails LLM                     |
-| Guardrails API failure                   | Fail-open (treat as pass), continue to `askLLM()`                                   |
-| OpenRouter API failure                   | Workflow retries the LLM step once; if still failing, reply with a generic error    |
-| INTERNAL_API / Lapidary API failure      | LLM receives an error from the tool and explains that data is currently unavailable |
-| LLM returns empty response               | Reply: "No response."                                                               |
-| Discord response post failure            | Workflow retries the response step up to 2 times before giving up                   |
-| Workflow failure (all retries exhausted) | Reply: "LLM processing failed. Please try again later."                             |
-| Langfuse API failure                     | Silently ignored; does not affect user response                                     |
-| Discord interaction timeout (>15 min)    | Response is silently dropped by Discord; no retry                                   |
-| Feedback score submission fails          | Buttons are still removed; Langfuse failure does not affect user experience         |
-| Feedback `custom_id` cannot be parsed    | Respond with ephemeral error message; buttons remain unchanged                      |
+| Scenario                                 | Behavior                                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Missing `question` option                | Reply: "Please provide a question."                                                              |
+| Guardrails rejects input                 | Reply with the rejection reason generated by the Guardrails LLM                                  |
+| Guardrails primary provider failure      | Retry with fallback provider; if both fail → fail-open (treat as pass)                           |
+| Primary provider API failure (LLM step)  | Retry with fallback provider; if fallback also fails → Workflow retries once, then generic error |
+| INTERNAL_API / Lapidary API failure      | LLM receives an error from the tool and explains that data is currently unavailable              |
+| LLM returns empty response               | Reply: "No response."                                                                            |
+| Discord response post failure            | Workflow retries the response step up to 2 times before giving up                                |
+| Workflow failure (all retries exhausted) | Reply: "LLM processing failed. Please try again later."                                          |
+| Langfuse API failure                     | Silently ignored; does not affect user response                                                  |
+| Discord interaction timeout (>15 min)    | Response is silently dropped by Discord; no retry                                                |
+| Feedback score submission fails          | Buttons are still removed; Langfuse failure does not affect user experience                      |
+| Feedback `custom_id` cannot be parsed    | Respond with ephemeral error message; buttons remain unchanged                                   |
 
 ## System Boundaries
 
-| Boundary           | Protocol                                            | Auth                                 |
-| ------------------ | --------------------------------------------------- | ------------------------------------ |
-| Discord → Bot      | HTTPS webhook, signature verification               | Discord public key                   |
-| Bot → OpenRouter   | HTTPS REST API                                      | API key (`OPENROUTER_API_KEY`)       |
-| Bot → Lapidary API | Cloudflare VPC Binding (`env.INTERNAL_API.fetch()`) | None (network-level isolation)       |
-| Bot → Langfuse     | HTTPS REST API                                      | Basic Auth (public key + secret key) |
+| Boundary               | Protocol                                            | Auth                                 |
+| ---------------------- | --------------------------------------------------- | ------------------------------------ |
+| Discord → Bot          | HTTPS webhook, signature verification               | Discord public key                   |
+| Bot → Google AI Studio | HTTPS REST API                                      | API key (`AI_STUDIO_API_KEY`)        |
+| Bot → OpenRouter       | HTTPS REST API                                      | API key (`OPENROUTER_API_KEY`)       |
+| Bot → Lapidary API     | Cloudflare VPC Binding (`env.INTERNAL_API.fetch()`) | None (network-level isolation)       |
+| Bot → Langfuse         | HTTPS REST API                                      | Basic Auth (public key + secret key) |
 
 ### Environment Bindings
 
@@ -237,7 +259,12 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | `DISCORD_BOT_TOKEN`      | Secret          | Discord bot authentication                                                                      |
 | `DISCORD_PUBLIC_KEY`     | Secret          | Webhook signature verification                                                                  |
 | `DISCORD_APPLICATION_ID` | Secret          | Discord application identifier                                                                  |
-| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication                                                                   |
+| `AI_STUDIO_API_KEY`      | Secret          | Google AI Studio API authentication                                                             |
+| `AI_STUDIO_GUARD_MODEL`  | Variable        | Model name for Guardrails via AI Studio                                                         |
+| `AI_STUDIO_ASK_MODEL`    | Variable        | Model name for LLM Processing via AI Studio                                                     |
+| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API authentication (fallback)                                                        |
+| `OPENROUTER_GUARD_MODEL` | Variable        | Model name for Guardrails via OpenRouter (fallback)                                             |
+| `OPENROUTER_ASK_MODEL`   | Variable        | Model name for LLM Processing via OpenRouter (fallback)                                         |
 | `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API access                                                             |
 | `INTERNAL_API_URL`       | Secret          | Base URL for Lapidary API requests (configured via Cloudflare dashboard, not in wrangler.jsonc) |
 | `LANGFUSE_PUBLIC_KEY`    | Secret          | Langfuse API authentication (public key)                                                        |
@@ -256,7 +283,9 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | Stdlib               | A standard library shipped with Ruby that requires explicit `require` (e.g., json, net/http)                         |
 | Node ID              | Identifier in `type://name` format (e.g., `Rubyist://matz`, `CoreModule://String`)                                   |
 | VPC Binding          | Cloudflare's mechanism for private service-to-service communication                                                  |
-| OpenRouter           | An LLM gateway that provides access to multiple AI models through a unified API                                      |
+| Google AI Studio     | Google's platform for accessing Gemini models via API, used as the primary LLM provider                              |
+| OpenRouter           | An LLM gateway that provides access to multiple AI models through a unified API; used as the fallback provider       |
+| Provider Fallback    | Automatic retry of an LLM call using the fallback provider when the primary provider returns an API error            |
 | Tool Calling         | The AI SDK pattern where the LLM invokes predefined functions to retrieve external data                              |
 | Langfuse             | An open-source LLM observability platform for tracing, evaluating, and debugging AI applications                     |
 | TelemetryIntegration | AI SDK v6 lifecycle hook interface for collecting telemetry events without OTel dependencies                         |
