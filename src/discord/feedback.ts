@@ -16,12 +16,18 @@ export interface FeedbackData {
   direction: FeedbackDirection;
 }
 
+const CUSTOM_ID_MAX_LENGTH = 100;
+
 export function buildFeedbackCustomId(
   traceId: string,
   userId: string,
   direction: FeedbackDirection,
 ): string {
-  return `${FEEDBACK_PREFIX}:${traceId}:${userId}:${direction}`;
+  const fixedLength =
+    FEEDBACK_PREFIX.length + 1 + 1 + userId.length + 1 + direction.length;
+  const maxTraceIdLength = CUSTOM_ID_MAX_LENGTH - fixedLength;
+  const truncatedTraceId = traceId.slice(0, maxTraceIdLength);
+  return `${FEEDBACK_PREFIX}:${truncatedTraceId}:${userId}:${direction}`;
 }
 
 export function parseFeedbackCustomId(customId: string): FeedbackData | null {

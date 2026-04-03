@@ -18,12 +18,12 @@ describe("buildFeedbackButtons", () => {
     const [thumbsUp, thumbsDown] = row.components;
     expect(thumbsUp!.type).toBe(ComponentType.Button);
     expect((thumbsUp as any).style).toBe(ButtonStyle.Secondary);
-    expect((thumbsUp as any).label).toBe("👍");
+    expect((thumbsUp as any).label).toBe("👍 Helpful");
     expect((thumbsUp as any).custom_id).toBe("feedback:trace-123:user-456:up");
 
     expect(thumbsDown!.type).toBe(ComponentType.Button);
     expect((thumbsDown as any).style).toBe(ButtonStyle.Secondary);
-    expect((thumbsDown as any).label).toBe("👎");
+    expect((thumbsDown as any).label).toBe("👎 Not helpful");
     expect((thumbsDown as any).custom_id).toBe(
       "feedback:trace-123:user-456:down",
     );
@@ -39,6 +39,38 @@ describe("buildFeedbackCustomId", () => {
       userId: "user-2",
       direction: "up",
     });
+  });
+});
+
+describe("buildFeedbackCustomId truncation", () => {
+  it("truncates traceId to keep custom_id within 100 characters", () => {
+    const longTraceId = "a".repeat(200);
+    const userId = "user-123";
+    const customId = buildFeedbackCustomId(longTraceId, userId, "up");
+
+    expect(customId.length).toBeLessThanOrEqual(100);
+    expect(customId).toMatch(/^feedback:.+:user-123:up$/);
+  });
+
+  it("preserves traceId when custom_id is already within limit", () => {
+    const traceId = "short-trace";
+    const customId = buildFeedbackCustomId(traceId, "user-1", "down");
+
+    expect(customId).toBe("feedback:short-trace:user-1:down");
+  });
+
+  it("round-trips correctly with truncated traceId", () => {
+    const longTraceId = "b".repeat(200);
+    const userId = "user-456";
+    const customId = buildFeedbackCustomId(longTraceId, userId, "down");
+    const parsed = parseFeedbackCustomId(customId);
+
+    expect(parsed).not.toBeNull();
+    expect(parsed!.userId).toBe(userId);
+    expect(parsed!.direction).toBe("down");
+    expect(parsed!.traceId).toBe(
+      longTraceId.slice(0, customId.length - "feedback::user-456:down".length),
+    );
   });
 });
 

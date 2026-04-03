@@ -17,13 +17,13 @@ export function buildFeedbackButtons(
         {
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
-          label: "👍",
+          label: "👍 Helpful",
           custom_id: buildFeedbackCustomId(traceId, userId, "up"),
         },
         {
           type: ComponentType.Button,
           style: ButtonStyle.Secondary,
-          label: "👎",
+          label: "👎 Not helpful",
           custom_id: buildFeedbackCustomId(traceId, userId, "down"),
         },
       ],

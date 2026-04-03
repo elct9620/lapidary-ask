@@ -157,7 +157,7 @@ Feedback button clicks arrive as `MessageComponent` interactions on the same web
 | Event type | `score-create` (via batch ingestion API) |
 | `traceId`  | Extracted from `custom_id`               |
 | `name`     | `user-feedback`                          |
-| `value`    | `1` (👍) or `0` (👎)                     |
+| `value`    | `1` (👍) or `-1` (👎)                    |
 | `dataType` | `NUMERIC`                                |
 
 No additional storage (KV, D1) is required. The `custom_id` encodes all state needed for verification and scoring.
