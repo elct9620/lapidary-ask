@@ -103,6 +103,21 @@ describe("askLLM", () => {
     );
   });
 
+  it("throws when both providers fail", async () => {
+    mockedGenerateText
+      .mockRejectedValueOnce(new Error("Google API error"))
+      .mockRejectedValueOnce(new Error("OpenRouter API error"));
+
+    await expect(
+      askLLM({
+        question: "test question",
+        openrouter: mockOpenrouter,
+        google: mockGoogle,
+        tools: mockTools,
+      }),
+    ).rejects.toThrow("OpenRouter API error");
+  });
+
   it("falls back to openrouter when google fails", async () => {
     mockedGenerateText
       .mockRejectedValueOnce(new Error("Google API error"))

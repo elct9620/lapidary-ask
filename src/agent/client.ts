@@ -12,6 +12,7 @@ import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt, DEFAULT_LOCALE } from "./prompt";
 import type { Tools } from "./tools";
 import { buildTelemetryConfig } from "./telemetry-helpers";
+import { DEFAULT_AI_STUDIO_MODEL, DEFAULT_OPENROUTER_MODEL } from "../models";
 
 export interface AskLLMOptions {
   question: string;
@@ -53,8 +54,8 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
     question,
     openrouter,
     google,
-    openrouterModel = "openrouter/free",
-    aiStudioModel = "gemma-4-26b-a4b-it",
+    openrouterModel = DEFAULT_OPENROUTER_MODEL,
+    aiStudioModel = DEFAULT_AI_STUDIO_MODEL,
     tools,
     locale = DEFAULT_LOCALE,
     integrations,

@@ -5,6 +5,7 @@ import { createTools } from "./agent/tools";
 import { patchDiscordResponse } from "./discord/api";
 import { createTelemetryContext } from "./telemetry/context";
 import { createLangfuseClient } from "./telemetry/client";
+import { DEFAULT_AI_STUDIO_MODEL, DEFAULT_OPENROUTER_MODEL } from "./models";
 
 export interface ModelConfig {
   aiStudioAskModel: string;
@@ -20,10 +21,11 @@ export function createContainer() {
     : undefined;
   const tools = createTools(env.INTERNAL_API, env.INTERNAL_API_URL);
   const modelConfig: ModelConfig = {
-    aiStudioAskModel: env.AI_STUDIO_ASK_MODEL || "gemma-4-26b-a4b-it",
-    aiStudioGuardModel: env.AI_STUDIO_GUARD_MODEL || "gemma-4-26b-a4b-it",
-    openrouterAskModel: env.OPENROUTER_ASK_MODEL || "openrouter/free",
-    openrouterGuardModel: env.OPENROUTER_GUARD_MODEL || "openrouter/free",
+    aiStudioAskModel: env.AI_STUDIO_ASK_MODEL || DEFAULT_AI_STUDIO_MODEL,
+    aiStudioGuardModel: env.AI_STUDIO_GUARD_MODEL || DEFAULT_AI_STUDIO_MODEL,
+    openrouterAskModel: env.OPENROUTER_ASK_MODEL || DEFAULT_OPENROUTER_MODEL,
+    openrouterGuardModel:
+      env.OPENROUTER_GUARD_MODEL || DEFAULT_OPENROUTER_MODEL,
   };
 
   return {
