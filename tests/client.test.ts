@@ -71,7 +71,7 @@ describe("askLLM", () => {
         model: "model:openrouter/free",
         system: buildSystemPrompt("zh-TW"),
         prompt: "test question",
-        stopWhen: "stepCountIs(15)",
+        stopWhen: "stepCountIs(30)",
         tools: mockTools,
       }),
     );

@@ -43,7 +43,7 @@ async function generateWithModel(
     system: options.system,
     prompt: options.prompt,
     tools: options.tools,
-    stopWhen: stepCountIs(15),
+    stopWhen: stepCountIs(30),
     ...buildTelemetryConfig(options.integrations),
     ...(options.providerOptions
       ? { providerOptions: options.providerOptions }
