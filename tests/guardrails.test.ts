@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
@@ -14,8 +14,13 @@ import { generateText } from "ai";
 const mockedGenerateText = vi.mocked(generateText);
 
 const mockOpenrouter = vi.fn((model: string) => `model:${model}`) as any;
+const mockGoogle = vi.fn((model: string) => `google:${model}`) as any;
 
 describe("checkGuardrails", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("returns relevant: true for related questions", async () => {
     mockedGenerateText.mockResolvedValue({
       output: {
@@ -117,7 +122,7 @@ describe("checkGuardrails", () => {
     );
   });
 
-  it("passes correct parameters to generateText", async () => {
+  it("uses openrouter model when google is not provided", async () => {
     mockedGenerateText.mockResolvedValue({
       output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
@@ -133,6 +138,84 @@ describe("checkGuardrails", () => {
         output: expect.anything(),
         prompt: "Who maintains String?",
         system: expect.stringContaining("Lapidary Knowledge Graph"),
+      }),
+    );
+  });
+
+  it("uses google as primary provider when available", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { reasoning: "...", relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "Who maintains String?",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledTimes(1);
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "google:gemma-4-26b-a4b-it",
+      }),
+    );
+  });
+
+  it("falls back to openrouter when google fails", async () => {
+    mockedGenerateText
+      .mockRejectedValueOnce(new Error("Google API error"))
+      .mockResolvedValueOnce({
+        output: { reasoning: "...", relevant: true, reason: "" },
+      } as Awaited<ReturnType<typeof generateText>>);
+
+    const result = await checkGuardrails({
+      question: "Who maintains String?",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+    });
+
+    expect(result).toEqual({ reasoning: "...", relevant: true, reason: "" });
+    expect(mockedGenerateText).toHaveBeenCalledTimes(2);
+    expect(mockedGenerateText).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: "google:gemma-4-26b-a4b-it" }),
+    );
+    expect(mockedGenerateText).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ model: "model:openrouter/free" }),
+    );
+  });
+
+  it("fail-opens when both providers fail", async () => {
+    mockedGenerateText
+      .mockRejectedValueOnce(new Error("Google API error"))
+      .mockRejectedValueOnce(new Error("OpenRouter API error"));
+
+    const result = await checkGuardrails({
+      question: "Who maintains String?",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+    });
+
+    expect(result).toEqual({ reasoning: "", relevant: true, reason: "" });
+  });
+
+  it("uses custom model names when provided", async () => {
+    mockedGenerateText.mockResolvedValue({
+      output: { reasoning: "...", relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "Who maintains String?",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+      aiStudioModel: "gemma-4-31b-it",
+      openrouterModel: "google/gemma-3-27b-it",
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "google:gemma-4-31b-it",
       }),
     );
   });

@@ -1,5 +1,6 @@
-import { generateText, Output } from "ai";
+import { generateText, Output, type LanguageModel } from "ai";
 import type { TelemetryIntegration } from "ai";
+import type { GoogleGenerativeAIProvider } from "@ai-sdk/google";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { getLanguageName, DEFAULT_LOCALE, DOMAIN_DEFINITIONS } from "./prompt";
@@ -8,6 +9,9 @@ import { buildTelemetryConfig } from "./telemetry-helpers";
 export interface CheckGuardrailsOptions {
   question: string;
   openrouter: OpenRouterProvider;
+  google?: GoogleGenerativeAIProvider;
+  openrouterModel?: string;
+  aiStudioModel?: string;
   locale?: string;
   integrations?: TelemetryIntegration[];
 }
@@ -86,6 +90,23 @@ When in doubt about whether a question asks about maintainers/contributors vs. c
 Always respond the reason in **${language}**.`;
 }
 
+async function generateGuardrails(
+  model: LanguageModel,
+  system: string,
+  question: string,
+  integrations?: TelemetryIntegration[],
+): Promise<GuardrailsResult> {
+  const { output } = await generateText({
+    model,
+    output: Output.object({ schema: guardrailsSchema }),
+    system,
+    prompt: question,
+    ...buildTelemetryConfig(integrations),
+  });
+
+  return output ?? FAIL_OPEN;
+}
+
 export async function checkGuardrails(
   options: CheckGuardrailsOptions,
 ): Promise<GuardrailsResult> {
@@ -93,19 +114,39 @@ export async function checkGuardrails(
     const {
       question,
       openrouter,
+      google,
+      openrouterModel = "openrouter/free",
+      aiStudioModel = "gemma-4-26b-a4b-it",
       locale = DEFAULT_LOCALE,
       integrations,
     } = options;
 
-    const { output } = await generateText({
-      model: openrouter("openrouter/free"),
-      output: Output.object({ schema: guardrailsSchema }),
-      system: buildGuardrailsSystemPrompt(locale),
-      prompt: question,
-      ...buildTelemetryConfig(integrations),
-    });
+    const system = buildGuardrailsSystemPrompt(locale);
 
-    return output ?? FAIL_OPEN;
+    if (!google) {
+      return await generateGuardrails(
+        openrouter(openrouterModel),
+        system,
+        question,
+        integrations,
+      );
+    }
+
+    try {
+      return await generateGuardrails(
+        google(aiStudioModel),
+        system,
+        question,
+        integrations,
+      );
+    } catch {
+      return await generateGuardrails(
+        openrouter(openrouterModel),
+        system,
+        question,
+        integrations,
+      );
+    }
   } catch {
     return FAIL_OPEN;
   }

@@ -54,6 +54,9 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
     const result = await checkGuardrails({
       question,
       openrouter: container.openrouter,
+      google: container.google,
+      openrouterModel: container.modelConfig.openrouterGuardModel,
+      aiStudioModel: container.modelConfig.aiStudioGuardModel,
       locale,
       integrations,
     });
@@ -84,6 +87,9 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       return await askLLM({
         question,
         openrouter: container.openrouter,
+        google: container.google,
+        openrouterModel: container.modelConfig.openrouterAskModel,
+        aiStudioModel: container.modelConfig.aiStudioAskModel,
         tools: container.tools,
         locale,
         integrations,

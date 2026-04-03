@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { buildSystemPrompt } from "../src/agent/prompt";
 
 vi.mock("ai", async (importOriginal) => {
@@ -16,12 +16,17 @@ import { generateText } from "ai";
 const mockedGenerateText = vi.mocked(generateText);
 
 const mockOpenrouter = vi.fn((model: string) => `model:${model}`) as any;
+const mockGoogle = vi.fn((model: string) => `google:${model}`) as any;
 const mockTools = {
   searchNodes: { execute: vi.fn() },
   getNeighbors: { execute: vi.fn() },
 } as any;
 
 describe("askLLM", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("returns LLM text on success", async () => {
     mockedGenerateText.mockResolvedValue({
       text: "Hello from LLM",
@@ -50,7 +55,7 @@ describe("askLLM", () => {
     expect(result).toBe("No response.");
   });
 
-  it("passes correct parameters to generateText", async () => {
+  it("uses openrouter model when google is not provided", async () => {
     mockedGenerateText.mockResolvedValue({
       text: "response",
     } as Awaited<ReturnType<typeof generateText>>);
@@ -63,10 +68,103 @@ describe("askLLM", () => {
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
+        model: "model:openrouter/free",
         system: buildSystemPrompt("zh-TW"),
         prompt: "test question",
         stopWhen: "stepCountIs(15)",
         tools: mockTools,
+      }),
+    );
+  });
+
+  it("uses google as primary provider when available", async () => {
+    mockedGenerateText.mockResolvedValue({
+      text: "response from google",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    const result = await askLLM({
+      question: "test question",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+      tools: mockTools,
+    });
+
+    expect(result).toBe("response from google");
+    expect(mockedGenerateText).toHaveBeenCalledTimes(1);
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "google:gemma-4-26b-a4b-it",
+        providerOptions: {
+          google: {
+            thinkingConfig: { thinkingLevel: "medium" },
+          },
+        },
+      }),
+    );
+  });
+
+  it("falls back to openrouter when google fails", async () => {
+    mockedGenerateText
+      .mockRejectedValueOnce(new Error("Google API error"))
+      .mockResolvedValueOnce({
+        text: "fallback response",
+      } as Awaited<ReturnType<typeof generateText>>);
+
+    const result = await askLLM({
+      question: "test question",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+      tools: mockTools,
+    });
+
+    expect(result).toBe("fallback response");
+    expect(mockedGenerateText).toHaveBeenCalledTimes(2);
+    expect(mockedGenerateText).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: "google:gemma-4-26b-a4b-it" }),
+    );
+    expect(mockedGenerateText).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ model: "model:openrouter/free" }),
+    );
+  });
+
+  it("uses custom model names when provided", async () => {
+    mockedGenerateText.mockResolvedValue({
+      text: "response",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await askLLM({
+      question: "test question",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+      aiStudioModel: "gemma-4-31b-it",
+      openrouterModel: "google/gemma-3-27b-it",
+      tools: mockTools,
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "google:gemma-4-31b-it",
+      }),
+    );
+  });
+
+  it("uses custom openrouter model when google is not provided", async () => {
+    mockedGenerateText.mockResolvedValue({
+      text: "response",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await askLLM({
+      question: "test question",
+      openrouter: mockOpenrouter,
+      openrouterModel: "google/gemma-3-27b-it",
+      tools: mockTools,
+    });
+
+    expect(mockedGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "model:google/gemma-3-27b-it",
       }),
     );
   });
@@ -127,5 +225,20 @@ describe("askLLM", () => {
         system: buildSystemPrompt("ja"),
       }),
     );
+  });
+
+  it("does not pass providerOptions when using openrouter only", async () => {
+    mockedGenerateText.mockResolvedValue({
+      text: "response",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await askLLM({
+      question: "test question",
+      openrouter: mockOpenrouter,
+      tools: mockTools,
+    });
+
+    const call = mockedGenerateText.mock.calls[0][0];
+    expect(call).not.toHaveProperty("providerOptions");
   });
 });
