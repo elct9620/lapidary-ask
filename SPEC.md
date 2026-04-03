@@ -10,6 +10,14 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Community Member | A Ruby community Discord user who asks questions about Rubyists and their relationships to core modules and standard libraries |
 
+## Impacts
+
+| Behavior Change                 | Before                                           | After                                                                      |
+| ------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
+| Discovering module maintainers  | Manually search bugs.ruby-lang.org discussions   | Ask a natural language question in Discord and receive an immediate answer |
+| Exploring Rubyist contributions | Browse issue tracker threads one by one          | Query the Knowledge Graph for a Rubyist's connected modules in one step    |
+| Accessing Knowledge Graph data  | Requires direct API access or database knowledge | Available to any Discord community member via `/ask`                       |
+
 ## Scope
 
 ### IS
@@ -53,16 +61,16 @@ Lapidary Ask Bot is a Discord Bot that enables Ruby community members to query t
 | Option              | `question` (string, required)                                            |
 | Response visibility | Visible to the entire channel                                            |
 | Response format     | Markdown                                                                 |
-| Maximum LLM steps   | 15                                                                       |
+| Maximum LLM steps   | 15; when reached, returns the response generated so far (no error)       |
 | Max response length | 2000 characters (Discord limit); truncated with `...` suffix if exceeded |
 
 #### Request Flow
 
-1. Discord webhook → Hono → `handleDiscordWebhook()`
-2. Verify signature, defer response, start `AskWorkflow`
-3. `AskWorkflow.run()` calls Guardrails to check input relevance
+1. Discord sends webhook → verify Ed25519 signature → defer response (ACK)
+2. Start async Workflow for LLM processing
+3. Workflow runs Guardrails to check input relevance
 4. If irrelevant → reply with Guardrails rejection reason, end workflow
-5. If relevant → call `askLLM()` with tools (max 15 steps); TelemetryIntegration collects events during execution
+5. If relevant → invoke LLM with tools (max 15 steps); telemetry events collected during execution
 6. Format response and patch back to Discord with feedback buttons attached (telemetry batch sent to Langfuse within the LLM step)
 
 ### LLM Provider Strategy
@@ -154,9 +162,21 @@ The system uses the Vercel AI SDK (`ai` package) to call LLM models, with Google
 | Fallback provider      | OpenRouter (configured via `OPENROUTER_ASK_MODEL`)      |
 | System prompt language | English                                                 |
 | Tool calling           | Enabled, up to 15 steps                                 |
-| Response language      | Matches the user's question language                    |
+| Response language      | Determined by Discord user locale (see below)           |
 
 The LLM receives the user's question and a set of tools for querying the Lapidary Knowledge Graph. It decides autonomously which tools to invoke (if any) and synthesizes results into a human-readable answer.
+
+#### Response Language
+
+The response language is derived from the Discord interaction's `locale` field (the user's Discord language setting), mapped to a language name and injected into the system prompt.
+
+| Discord Locale | Response Language             |
+| -------------- | ----------------------------- |
+| `zh-TW`        | Traditional Chinese (Taiwan)  |
+| `zh-CN`        | Simplified Chinese            |
+| `ja`           | Japanese                      |
+| `en-*`         | English                       |
+| Other / absent | Traditional Chinese (default) |
 
 ### Observability
 
@@ -172,6 +192,8 @@ The system uses AI SDK `TelemetryIntegration` lifecycle hooks to collect LLM tel
 | Score           | One per feedback click    | User feedback value (1 = helpful, 0 = not helpful) |
 
 #### Lifecycle Mapping
+
+The following table is a reference mapping between AI SDK lifecycle hooks and Langfuse events. The required data per entity is defined in the Data Collection table above; the specific hook-to-event wiring is an implementation detail.
 
 | AI SDK Event       | Langfuse Event      |
 | ------------------ | ------------------- |
@@ -238,6 +260,7 @@ The LLM interprets tool errors and responds to the user in natural language. Too
 | Guardrails provider failure              | Fallback within step (primary → fallback); if both fail → fail-open (treat as pass)                                                        |
 | LLM step provider failure                | Fallback within step (primary → fallback); if both fail → step fails, Workflow retries once from primary; if still failing → generic error |
 | INTERNAL_API / Lapidary API failure      | LLM receives an error from the tool and explains that data is currently unavailable                                                        |
+| LLM reaches max steps (15)               | Return the response generated so far; not treated as an error                                                                              |
 | LLM returns empty response               | Reply: "No response."                                                                                                                      |
 | Discord response post failure            | Workflow retries the response step up to 2 times before giving up                                                                          |
 | Workflow failure (all retries exhausted) | Reply: "LLM processing failed. Please try again later."                                                                                    |
