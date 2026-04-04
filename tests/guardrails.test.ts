@@ -338,7 +338,7 @@ describe("checkGuardrails", () => {
     );
   });
 
-  it("system prompt includes step-by-step classification instructions", async () => {
+  it("system prompt includes workflow XML DSL for classification", async () => {
     mockedGenerateText.mockResolvedValue({
       output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);

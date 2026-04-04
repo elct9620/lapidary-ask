@@ -93,7 +93,7 @@ describe("buildSystemPrompt", () => {
   it("describes graph structure: edges only between Rubyist and Module/Stdlib", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain("## Graph Structure");
+    expect(prompt).toContain("### Graph Structure");
     expect(prompt).toContain("Rubyist ↔ CoreModule");
     expect(prompt).toContain("Rubyist ↔ Stdlib");
     expect(prompt).toMatch(/no direct edge.*Rubyist.*Rubyist/i);
@@ -105,6 +105,16 @@ describe("buildSystemPrompt", () => {
 
     expect(prompt).toContain("Rubyist → Module → Rubyist");
     expect(prompt).toContain("no direct Rubyist↔Rubyist edge");
+  });
+
+  it("includes bipartite graph traversal planning step", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("plan-traversal");
+    expect(prompt).toContain("bipartite");
+    expect(prompt).toContain(
+      "Rubyist → Rubyist: minimum 2 hops (Rubyist → Module → Rubyist)",
+    );
   });
 
   it("includes max traversal depth limit", () => {

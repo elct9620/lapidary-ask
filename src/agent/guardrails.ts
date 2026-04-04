@@ -52,7 +52,7 @@ Determine whether the user's question is within the scope of the Lapidary Knowle
 ## Constitution & Guardrails
 
 - When in doubt about whether a question asks about maintainers/contributors vs. code implementation, classify as **relevant** — the downstream assistant will handle scoping.
-- Always respond the reason in **${language}**.
+- Always write the reason in **${language}**.
 
 ## Domain Knowledge
 
