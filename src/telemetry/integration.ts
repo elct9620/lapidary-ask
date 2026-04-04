@@ -87,6 +87,7 @@ export class LangfuseTelemetryIntegration implements TelemetryIntegration {
       output: event.success ? event.output : { error: event.error },
       startTime: pending?.startTime ?? new Date().toISOString(),
       endTime: new Date().toISOString(),
+      ...(!event.success && { level: "ERROR" }),
       metadata: {
         durationMs: event.durationMs,
         success: event.success,

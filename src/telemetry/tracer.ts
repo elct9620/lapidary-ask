@@ -28,7 +28,10 @@ export class LangfuseTracer {
       id: crypto.randomUUID(),
       type,
       timestamp: new Date().toISOString(),
-      body,
+      body: {
+        ...body,
+        ...(this.environment && { environment: this.environment }),
+      },
     });
   }
 
@@ -42,7 +45,6 @@ export class LangfuseTracer {
       id: this._traceId,
       name: options.name,
       input: options.input,
-      environment: this.environment,
       ...(options.metadata && { metadata: options.metadata }),
     });
     return this._traceId;
@@ -59,12 +61,18 @@ export class LangfuseTracer {
     return agentId;
   }
 
-  endAgent(agentId: string, output: unknown): void {
+  endAgent(
+    agentId: string,
+    output: unknown,
+    options?: { level?: string; statusMessage?: string },
+  ): void {
     this.emit("agent-update", {
       id: agentId,
       traceId: this._traceId,
       endTime: new Date().toISOString(),
       output,
+      ...(options?.level && { level: options.level }),
+      ...(options?.statusMessage && { statusMessage: options.statusMessage }),
     });
   }
 
@@ -92,6 +100,8 @@ export class LangfuseTracer {
     options: {
       output: unknown;
       model?: string;
+      level?: string;
+      statusMessage?: string;
       usage?: { input?: number; output?: number; total?: number };
       metadata?: Record<string, unknown>;
     },
@@ -101,6 +111,8 @@ export class LangfuseTracer {
       traceId: this._traceId,
       model: options.model,
       output: options.output,
+      ...(options.level && { level: options.level }),
+      ...(options.statusMessage && { statusMessage: options.statusMessage }),
       endTime: new Date().toISOString(),
       ...(options.metadata && { metadata: options.metadata }),
       usage: options.usage ? { ...options.usage, unit: "TOKENS" } : undefined,
@@ -114,6 +126,8 @@ export class LangfuseTracer {
     output: unknown;
     startTime: string;
     endTime: string;
+    level?: string;
+    statusMessage?: string;
     metadata?: Record<string, unknown>;
   }): string {
     return this.createObservation("tool", options);
@@ -126,6 +140,8 @@ export class LangfuseTracer {
     output: unknown;
     startTime: string;
     endTime: string;
+    level?: string;
+    statusMessage?: string;
     metadata?: Record<string, unknown>;
   }): string {
     return this.createObservation("guardrail", options);
@@ -141,6 +157,8 @@ export class LangfuseTracer {
       output: unknown;
       startTime: string;
       endTime: string;
+      level?: string;
+      statusMessage?: string;
       metadata?: Record<string, unknown>;
     },
   ): string {
@@ -156,6 +174,8 @@ export class LangfuseTracer {
       output: options.output,
       startTime: options.startTime,
       endTime: options.endTime,
+      ...(options.level && { level: options.level }),
+      ...(options.statusMessage && { statusMessage: options.statusMessage }),
       ...(options.metadata && { metadata: options.metadata }),
     });
     return id;

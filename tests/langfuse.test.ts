@@ -249,6 +249,46 @@ describe("LangfuseTracer", () => {
     expect(batch[0].body.environment).toBe("production");
   });
 
+  it("includes environment in all event types", async () => {
+    const tracer = new LangfuseTracer({
+      client,
+      environment: "staging",
+    });
+
+    tracer.createTrace({ name: "test", input: "test" });
+    const agentId = tracer.createAgent({ name: "ask-llm" });
+    const genId = tracer.createGeneration({
+      parentId: agentId,
+      name: "step-0",
+      model: "test-model",
+      input: [],
+    });
+    tracer.endGeneration(genId, { output: { text: "ok" } });
+    tracer.endAgent(agentId, "done");
+    tracer.createTool({
+      parentId: genId,
+      name: "searchNodes",
+      input: {},
+      output: {},
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+    });
+    tracer.createGuardrail({
+      name: "check-guardrails",
+      input: "test",
+      output: { relevant: true },
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+    });
+
+    await tracer.flush();
+    const batch = parseBatch();
+
+    for (const event of batch) {
+      expect(event.body.environment).toBe("staging");
+    }
+  });
+
   it("omits environment when not provided", async () => {
     const tracer = new LangfuseTracer({ client });
     tracer.createTrace({ name: "test", input: "test" });
@@ -312,6 +352,62 @@ describe("LangfuseTracer", () => {
       total: 75,
       unit: "TOKENS",
     });
+  });
+
+  it("endGeneration includes level and statusMessage when provided", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+    const genId = tracer.createGeneration({
+      parentId: null,
+      name: "step-0",
+      input: [],
+    });
+
+    tracer.endGeneration(genId, {
+      output: { error: "model failed" },
+      level: "ERROR",
+      statusMessage: "API returned 500",
+    });
+
+    await tracer.flush();
+    const batch = parseBatch();
+    const genUpdate = batch.find((e: any) => e.type === "generation-update");
+    expect(genUpdate.body.level).toBe("ERROR");
+    expect(genUpdate.body.statusMessage).toBe("API returned 500");
+  });
+
+  it("endAgent includes level when provided", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+    const agentId = tracer.createAgent({ name: "ask-llm" });
+    tracer.endAgent(agentId, "error output", { level: "ERROR" });
+
+    await tracer.flush();
+    const batch = parseBatch();
+    const agentUpdate = batch.find((e: any) => e.type === "agent-update");
+    expect(agentUpdate.body.level).toBe("ERROR");
+  });
+
+  it("createTool includes level when provided", async () => {
+    const tracer = new LangfuseTracer({ client });
+    tracer.createTrace({ name: "test", input: "test" });
+
+    tracer.createTool({
+      parentId: null,
+      name: "searchNodes",
+      input: { query: "Ruby" },
+      output: { error: "timeout" },
+      startTime: "2025-01-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:01.000Z",
+      level: "ERROR",
+      statusMessage: "Tool execution timed out",
+    });
+
+    await tracer.flush();
+    const batch = parseBatch();
+    const toolEvent = batch.find((e: any) => e.type === "tool-create");
+    expect(toolEvent.body.level).toBe("ERROR");
+    expect(toolEvent.body.statusMessage).toBe("Tool execution timed out");
   });
 
   it("createTool emits tool-create with parent", async () => {
@@ -389,7 +485,7 @@ describe("LangfuseTracer", () => {
     const tracer = new LangfuseTracer({ client });
     tracer.setTraceId("existing-trace-id");
 
-    const agentId = tracer.createAgent({ name: "ask-llm" });
+    tracer.createAgent({ name: "ask-llm" });
     await tracer.flush();
 
     const batch = parseBatch();
@@ -662,6 +758,66 @@ describe("LangfuseTelemetryIntegration", () => {
       durationMs: 100,
       success: true,
     });
+  });
+
+  it("tool-create has ERROR level when tool call fails", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
+
+    await integration.onStart!({
+      model: { provider: "openrouter", modelId: "openrouter/free" },
+      prompt: "test",
+    } as any);
+
+    await integration.onStepStart!({
+      stepNumber: 0,
+      model: { provider: "openrouter", modelId: "openrouter/free" },
+    } as any);
+
+    await integration.onToolCallStart!({
+      stepNumber: 0,
+      toolCall: {
+        toolCallId: "tc-fail",
+        toolName: "searchNodes",
+        input: { query: "Ruby" },
+      },
+    } as any);
+
+    await integration.onToolCallFinish!({
+      stepNumber: 0,
+      toolCall: {
+        toolCallId: "tc-fail",
+        toolName: "searchNodes",
+        input: { query: "Ruby" },
+      },
+      success: false,
+      error: "Connection timeout",
+      durationMs: 5000,
+    } as any);
+
+    await integration.onStepFinish!({
+      stepNumber: 0,
+      usage: { inputTokens: 50, outputTokens: 25 },
+      text: "response",
+    } as any);
+
+    await integration.onFinish!({
+      text: "response",
+      totalUsage: { inputTokens: 50, outputTokens: 25 },
+    } as any);
+
+    const batch = parseBatch();
+    const toolCreate = batch.find((e: any) => e.type === "tool-create");
+    expect(toolCreate.body.level).toBe("ERROR");
+    expect(toolCreate.body.output).toEqual({ error: "Connection timeout" });
+    expect(toolCreate.body.metadata.success).toBe(false);
+  });
+
+  it("tool-create omits level when tool call succeeds", async () => {
+    const integration = new LangfuseTelemetryIntegration({ tracer });
+    await runLifecycle(integration, { withToolCall: true });
+
+    const toolCreate = findEvent("tool-create");
+    expect(toolCreate.body.level).toBeUndefined();
   });
 
   it("handles duplicate tool names via toolCallId", async () => {
