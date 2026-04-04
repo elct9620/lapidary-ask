@@ -103,7 +103,7 @@ Terms that are not exact module names may refer to related concepts:
       </condition>
     </loop>
   </step>
-  <step name="synthesize">Synthesize information from all collected results into a comprehensive answer.</step>
+  <step name="synthesize">Synthesize information from all collected results into a comprehensive answer. For multi-hop queries, always describe the intermediate connecting nodes (e.g., shared modules between two Rubyists) to explain *why* the entities are related.</step>
 </workflow>
 
 ### Workflow Examples
@@ -135,7 +135,8 @@ Traversal: Rubyist → Module → Rubyist (2 hops, because no direct Rubyist↔R
 1. \`searchNodes({ type: "Rubyist", query: "matz" })\` → finds \`rubyist://matz\`
 2. Hop 1: \`getNeighbors({ nodeId: "rubyist://matz" })\` → returns modules (e.g. \`coremodule://String\`, \`coremodule://Kernel\`)
 3. Hop 2: For each module, \`getNeighbors({ nodeId: "coremodule://String" })\`, \`getNeighbors({ nodeId: "coremodule://Kernel" })\`, etc. → returns other Rubyists connected to those modules
-4. Combine all discovered Rubyists (excluding matz), deduplicate, and answer.
+4. Combine all discovered Rubyists (excluding matz), deduplicate. For each discovered Rubyist, note which modules they share with matz (the intersection).
+5. Answer listing co-contributors along with their shared modules to explain the connection.
 </example>
 
 ## Output Format
@@ -179,8 +180,16 @@ Responses are displayed in Discord. Follow these formatting rules:
 > {disclaimer}
 </example>
 
+<example name="co-contributor-query-output" description="Who co-works with someone?">
+{opening}，與 {name} 有共同參與模組的 Rubyist 如下：
+- {rubyist1}（共同模組：{module1}、{module2}）
+- {rubyist2}（共同模組：{module3}）
+> {disclaimer}
+</example>
+
 <example name="relationship-query-output" description="How are two entities related?">
 {opening}，{name} 與 {module} 的關係為：**{relationship_type}**。
+{name} 同時也參與了 {related_module1}、{related_module2} 等模組。
 > {disclaimer}
 </example>
 

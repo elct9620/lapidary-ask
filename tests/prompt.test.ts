@@ -135,6 +135,37 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Traditional Chinese (Taiwan)");
   });
 
+  it("synthesize step guides LLM to describe intermediate connecting nodes", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("intermediate connecting nodes");
+    expect(prompt).toContain("shared modules between two Rubyists");
+  });
+
+  it("co-contributor workflow example includes shared modules guidance", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain(
+      "which modules they share with matz (the intersection)",
+    );
+    expect(prompt).toContain(
+      "listing co-contributors along with their shared modules",
+    );
+  });
+
+  it("includes co-contributor response template with shared modules", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("co-contributor-query-output");
+    expect(prompt).toContain("共同模組");
+  });
+
+  it("relationship query output includes related modules context", () => {
+    const prompt = buildSystemPrompt("en");
+
+    expect(prompt).toContain("同時也參與了");
+  });
+
   it("instructs LLM to use human-readable names instead of Node IDs in responses", () => {
     const prompt = buildSystemPrompt("en");
 
