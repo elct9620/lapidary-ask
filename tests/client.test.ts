@@ -96,7 +96,7 @@ describe("askLLM", () => {
         model: "google:gemma-4-26b-a4b-it",
         providerOptions: {
           google: {
-            thinkingConfig: { thinkingLevel: "medium" },
+            thinkingConfig: { thinkingLevel: "high" },
           },
         },
       }),
@@ -142,6 +142,28 @@ describe("askLLM", () => {
       2,
       expect.objectContaining({ model: "model:openrouter/free" }),
     );
+  });
+
+  it("logs warning when falling back from google to openrouter", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = new Error("Google API error");
+
+    mockedGenerateText.mockRejectedValueOnce(error).mockResolvedValueOnce({
+      text: "fallback response",
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await askLLM({
+      question: "test question",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+      tools: mockTools,
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "AI Studio request failed, falling back to OpenRouter",
+      error,
+    );
+    warnSpy.mockRestore();
   });
 
   it("uses custom model names when provided", async () => {

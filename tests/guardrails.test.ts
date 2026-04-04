@@ -186,6 +186,27 @@ describe("checkGuardrails", () => {
     );
   });
 
+  it("logs warning when falling back from google to openrouter", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = new Error("Google API error");
+
+    mockedGenerateText.mockRejectedValueOnce(error).mockResolvedValueOnce({
+      output: { reasoning: "...", relevant: true, reason: "" },
+    } as Awaited<ReturnType<typeof generateText>>);
+
+    await checkGuardrails({
+      question: "Who maintains String?",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "AI Studio guardrails failed, falling back to OpenRouter",
+      error,
+    );
+    warnSpy.mockRestore();
+  });
+
   it("fail-opens when both providers fail", async () => {
     mockedGenerateText
       .mockRejectedValueOnce(new Error("Google API error"))
@@ -198,6 +219,26 @@ describe("checkGuardrails", () => {
     });
 
     expect(result).toEqual({ reasoning: "", relevant: true, reason: "" });
+  });
+
+  it("logs warning when failing open due to complete failure", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    mockedGenerateText
+      .mockRejectedValueOnce(new Error("Google API error"))
+      .mockRejectedValueOnce(new Error("OpenRouter API error"));
+
+    await checkGuardrails({
+      question: "Who maintains String?",
+      openrouter: mockOpenrouter,
+      google: mockGoogle,
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Guardrails check failed entirely, failing open",
+      expect.any(Error),
+    );
+    warnSpy.mockRestore();
   });
 
   it("uses custom model names when provided", async () => {

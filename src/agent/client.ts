@@ -76,11 +76,12 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
       ...shared,
       providerOptions: {
         google: {
-          thinkingConfig: { thinkingLevel: "medium" },
+          thinkingConfig: { thinkingLevel: "high" },
         },
       },
     });
-  } catch {
+  } catch (error) {
+    console.warn("AI Studio request failed, falling back to OpenRouter", error);
     return generateWithModel(openrouter(openrouterModel), shared);
   }
 }

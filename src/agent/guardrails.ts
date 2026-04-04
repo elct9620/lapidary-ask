@@ -157,7 +157,11 @@ export async function checkGuardrails(
         question,
         integrations,
       );
-    } catch {
+    } catch (error) {
+      console.warn(
+        "AI Studio guardrails failed, falling back to OpenRouter",
+        error,
+      );
       return await generateGuardrails(
         openrouter(openrouterModel),
         system,
@@ -165,7 +169,8 @@ export async function checkGuardrails(
         integrations,
       );
     }
-  } catch {
+  } catch (error) {
+    console.warn("Guardrails check failed entirely, failing open", error);
     return FAIL_OPEN;
   }
 }
