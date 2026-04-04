@@ -42,14 +42,12 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt("en");
 
     const requiredSections = [
-      "## Data Source",
-      "## Tools",
-      "## Graph Structure",
-      "## Query Planning",
-      "## Query Workflow",
-      "### Error Handling",
-      "## Response Format",
-      "## Response Language",
+      "## Goal",
+      "## Constitution & Guardrails",
+      "## Domain Knowledge",
+      "## Workflow",
+      "## Output Format",
+      "## Error Handling",
     ];
 
     for (const section of requiredSections) {
@@ -60,8 +58,8 @@ describe("buildSystemPrompt", () => {
   it("instructs to skip searchNodes when module name is known", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain("If the module/library name is already clear");
-    expect(prompt).toContain("skip `searchNodes`");
+    expect(prompt).toContain("module/library name is already known");
+    expect(prompt).toContain("Skip searchNodes");
   });
 
   it("includes stdlib reference in module query example", () => {
@@ -74,21 +72,20 @@ describe("buildSystemPrompt", () => {
   it("includes guidance for auto-searching on general questions", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain(
-      "When a user asks a general question about a Ruby module or library",
-    );
+    expect(prompt).toContain("General questions about a module/library");
   });
 
-  it("includes query planning section", () => {
+  it("includes workflow section with XML DSL", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain("## Query Planning");
+    expect(prompt).toContain("<workflow>");
+    expect(prompt).toContain("</workflow>");
   });
 
   it("includes intent interpretation guidance for ambiguous queries", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain("Intent interpretation");
+    expect(prompt).toContain("interpret-intent");
     expect(prompt).toContain("ReDOS");
     expect(prompt).toContain("Regexp");
   });
@@ -106,13 +103,14 @@ describe("buildSystemPrompt", () => {
   it("includes multi-hop query guidance", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain("Multi-Hop Queries (Indirect Relationships)");
+    expect(prompt).toContain("Rubyist → Module → Rubyist");
+    expect(prompt).toContain("no direct Rubyist↔Rubyist edge");
   });
 
   it("includes max traversal depth limit", () => {
     const prompt = buildSystemPrompt("en");
 
-    expect(prompt).toContain("Maximum traversal depth: 3 hops.");
+    expect(prompt).toContain("Maximum traversal depth: 3 hops");
   });
 
   it("includes the specified response language", () => {

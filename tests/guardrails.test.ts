@@ -350,7 +350,7 @@ describe("checkGuardrails", () => {
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: expect.stringContaining("Classification Steps"),
+        system: expect.stringContaining("<workflow>"),
       }),
     );
   });
