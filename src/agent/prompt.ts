@@ -1,4 +1,4 @@
-export const DEFAULT_LOCALE = "zh-TW";
+export { DEFAULT_LOCALE } from "../locale";
 
 const LOCALE_LANGUAGE_MAP: Record<string, string> = {
   "zh-TW": "Traditional Chinese (Taiwan)",

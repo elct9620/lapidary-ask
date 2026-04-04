@@ -33,7 +33,7 @@ const messages: Record<string, Partial<Record<MessageKey, string>>> = {
   },
 };
 
-const DEFAULT_LOCALE = "zh-TW";
+export const DEFAULT_LOCALE = "zh-TW";
 
 function resolveLocale(locale: string): string {
   if (locale in messages) return locale;

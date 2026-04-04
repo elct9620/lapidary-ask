@@ -12,6 +12,7 @@ import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { buildSystemPrompt, DEFAULT_LOCALE } from "./prompt";
 import type { Tools } from "./tools";
 import { buildTelemetryConfig } from "./telemetry-helpers";
+import { withGoogleFallback } from "./provider-fallback";
 import {
   DEFAULT_AI_STUDIO_ASK_MODEL,
   DEFAULT_OPENROUTER_ASK_MODEL,
@@ -67,21 +68,21 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
   const system = buildSystemPrompt(locale);
   const shared = { system, prompt: question, tools, integrations };
 
-  if (!google) {
-    return generateWithModel(openrouter(openrouterModel), shared);
-  }
-
-  try {
-    return await generateWithModel(google(aiStudioModel), {
-      ...shared,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: "high" },
+  return withGoogleFallback({
+    google,
+    openrouter,
+    aiStudioModel,
+    openrouterModel,
+    label: "AI Studio request",
+    run: (model) => generateWithModel(model, shared),
+    runWithGoogle: (model) =>
+      generateWithModel(model, {
+        ...shared,
+        providerOptions: {
+          google: {
+            thinkingConfig: { thinkingLevel: "high" },
+          },
         },
-      },
-    });
-  } catch (error) {
-    console.warn("AI Studio request failed, falling back to OpenRouter", error);
-    return generateWithModel(openrouter(openrouterModel), shared);
-  }
+      }),
+  });
 }
