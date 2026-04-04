@@ -1,5 +1,7 @@
 import type { LangfuseClient } from "./client";
 
+export type ObservationLevel = "DEFAULT" | "DEBUG" | "WARNING" | "ERROR";
+
 export interface LangfuseTracerConfig {
   client: LangfuseClient;
   environment?: string;
@@ -64,7 +66,7 @@ export class LangfuseTracer {
   endAgent(
     agentId: string,
     output: unknown,
-    options?: { level?: string; statusMessage?: string },
+    options?: { level?: ObservationLevel; statusMessage?: string },
   ): void {
     this.emit("agent-update", {
       id: agentId,
@@ -100,7 +102,7 @@ export class LangfuseTracer {
     options: {
       output: unknown;
       model?: string;
-      level?: string;
+      level?: ObservationLevel;
       statusMessage?: string;
       usage?: { input?: number; output?: number; total?: number };
       metadata?: Record<string, unknown>;
@@ -126,7 +128,7 @@ export class LangfuseTracer {
     output: unknown;
     startTime: string;
     endTime: string;
-    level?: string;
+    level?: ObservationLevel;
     statusMessage?: string;
     metadata?: Record<string, unknown>;
   }): string {
@@ -140,7 +142,7 @@ export class LangfuseTracer {
     output: unknown;
     startTime: string;
     endTime: string;
-    level?: string;
+    level?: ObservationLevel;
     statusMessage?: string;
     metadata?: Record<string, unknown>;
   }): string {
@@ -157,7 +159,7 @@ export class LangfuseTracer {
       output: unknown;
       startTime: string;
       endTime: string;
-      level?: string;
+      level?: ObservationLevel;
       statusMessage?: string;
       metadata?: Record<string, unknown>;
     },
