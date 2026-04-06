@@ -30,6 +30,8 @@ const FIRE_AND_FORGET_STEP_CONFIG = {
   retries: { limit: 0, delay: "1 second" as const },
 };
 
+const PLACEHOLDER_SPAN_ID = "aaaaaaaaaaaaaaaa";
+
 export interface AskWorkflowParams {
   question: string;
   interactionToken: string;
@@ -115,7 +117,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       const parentContext = traceId
         ? trace.setSpanContext(ROOT_CONTEXT, {
             traceId,
-            spanId: "aaaaaaaaaaaaaaaa",
+            spanId: PLACEHOLDER_SPAN_ID,
             traceFlags: TraceFlags.SAMPLED,
             isRemote: true,
           })
