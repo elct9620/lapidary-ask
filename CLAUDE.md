@@ -39,10 +39,16 @@ The project follows a layered architecture under `src/`:
   - `guardrails.ts` — `checkGuardrails()` lightweight relevance classifier (fail-open on error)
   - `tools.ts` — AI SDK tool definitions (`searchNodes`, `getNeighbors`) for querying Lapidary Knowledge Graph via `INTERNAL_API` service binding
   - `prompt.ts` — Locale-aware system prompt builder (maps Discord locale to response language)
-  - `telemetry-helpers.ts` — `buildTelemetryConfig()` helper for AI SDK telemetry integration
-- **Telemetry**: `src/telemetry/` — Three-layer Langfuse integration (see below)
+  - `provider-fallback.ts` — `withGoogleFallback()` generic dual-provider fallback (Google AI Studio primary, OpenRouter fallback)
+  - `index.ts` — Re-exports `askLLM` and `checkGuardrails`
+- **Telemetry**: `src/telemetry/` — Langfuse client for feedback scores (see below)
 - **Formatting**: `src/format.ts` — Wraps GFM tables in code blocks for Discord, truncates to 2000 chars
 - **Command definitions**: `src/commands.ts` — Discord slash command registration metadata (with zh-TW and ja localizations)
+- **Container**: `src/container.ts` — Dependency injection factory (`createContainer()`) that wires providers, tools, telemetry, and Discord helpers from `env`
+- **Models**: `src/models.ts` — Default model name constants for AI Studio and OpenRouter
+- **Locale**: `src/locale.ts` — Discord locale to language name mapping
+- **Discord feedback**: `src/discord/feedback.ts` — Button click handler for 👍/👎 feedback scoring
+- **Discord components**: `src/discord/components.ts` — Feedback button component builders
 - **Registration script**: `scripts/register.ts` — Registers/clears slash commands via Discord API
 
 ### Request Flow
@@ -60,15 +66,12 @@ The project follows a layered architecture under `src/`:
 
 ### Telemetry Architecture
 
-`src/telemetry/` follows a three-layer design with unidirectional dependency flow (Integration → Tracer → Client):
+Telemetry uses `@aotoki/edge-otel` with a Langfuse exporter, configured via `createTracerProvider()` in `src/container.ts`. The AI SDK's `experimental_telemetry` option receives an OpenTelemetry `Tracer` instance directly — no custom integration layer.
 
-| Layer           | File             | Responsibility                                                                                                                |
-| --------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Client**      | `client.ts`      | Event buffer + Langfuse REST API batch ingestion                                                                              |
-| **Tracer**      | `tracer.ts`      | Semantic event creation (`createTrace`, `createGeneration`, `createTool`, `createGuardrail`) and trace ID lifecycle           |
-| **Integration** | `integration.ts` | Implements Vercel AI SDK `TelemetryIntegration` hooks (`onStart`, `onStepStart/Finish`, `onToolCallStart/Finish`, `onFinish`) |
+- `src/telemetry/client.ts` — `LangfuseClient` used only for feedback score ingestion (`createScore()`), not for LLM tracing
+- `src/container.ts` — `createTracerProvider()` sets up the `@aotoki/edge-otel` tracer with Langfuse exporter; returns `null` when credentials are missing
 
-The workflow creates a single trace spanning both guardrails and LLM steps by passing `traceId` from the guardrails step to the LLM step via `tracer.setTraceId()`.
+Telemetry is opt-in: when `LANGFUSE_PUBLIC_KEY` or `LANGFUSE_SECRET_KEY` is not configured, tracing is disabled silently.
 
 ## Testing
 
@@ -80,16 +83,21 @@ Workflow tests use `introspectWorkflowInstance` with `mockStepResult`/`mockStepE
 
 ## Key Bindings
 
-| Binding                  | Type            | Purpose                            |
-| ------------------------ | --------------- | ---------------------------------- |
-| `DISCORD_BOT_TOKEN`      | Secret          | Discord bot auth                   |
-| `DISCORD_PUBLIC_KEY`     | Secret          | Webhook signature verification     |
-| `DISCORD_APPLICATION_ID` | Secret          | Discord app ID                     |
-| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API auth                |
-| `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API (VPC) |
-| `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests |
-| `LANGFUSE_PUBLIC_KEY`    | Secret          | Langfuse API auth (public key)     |
-| `LANGFUSE_SECRET_KEY`    | Secret          | Langfuse API auth (secret key)     |
-| `LANGFUSE_BASE_URL`      | Variable        | Langfuse API base URL              |
-| `ENVIRONMENT`            | Variable        | Environment name for telemetry     |
-| `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow binding        |
+| Binding                  | Type            | Purpose                                 |
+| ------------------------ | --------------- | --------------------------------------- |
+| `DISCORD_BOT_TOKEN`      | Secret          | Discord bot auth                        |
+| `DISCORD_PUBLIC_KEY`     | Secret          | Webhook signature verification          |
+| `DISCORD_APPLICATION_ID` | Secret          | Discord app ID                          |
+| `AI_STUDIO_API_KEY`      | Secret          | Google AI Studio API auth (primary)     |
+| `AI_STUDIO_GUARD_MODEL`  | Variable        | Model for Guardrails via AI Studio      |
+| `AI_STUDIO_ASK_MODEL`    | Variable        | Model for LLM Processing via AI Studio  |
+| `OPENROUTER_API_KEY`     | Secret          | OpenRouter API auth (fallback)          |
+| `OPENROUTER_GUARD_MODEL` | Variable        | Model for Guardrails via OpenRouter     |
+| `OPENROUTER_ASK_MODEL`   | Variable        | Model for LLM Processing via OpenRouter |
+| `INTERNAL_API`           | Service Binding | Lapidary Knowledge Graph API (VPC)      |
+| `INTERNAL_API_URL`       | Variable        | Base URL for Lapidary API requests      |
+| `LANGFUSE_PUBLIC_KEY`    | Secret          | Langfuse API auth (public key)          |
+| `LANGFUSE_SECRET_KEY`    | Secret          | Langfuse API auth (secret key)          |
+| `LANGFUSE_BASE_URL`      | Variable        | Langfuse API base URL                   |
+| `ENVIRONMENT`            | Variable        | Environment name for telemetry          |
+| `ASK_WORKFLOW`           | Workflow        | Cloudflare Workflow binding             |
