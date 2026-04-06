@@ -56,7 +56,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
       return { ...result, traceId: undefined };
     }
 
-    const tracer = provider.getTracer("ask-workflow");
+    const tracer = provider.getTracer("ai");
     let traceId: string | undefined;
 
     try {
@@ -99,7 +99,7 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   private async askLLMStep(question: string, locale: string, traceId?: string) {
     const container = createContainer();
     const provider = container.createTracerProvider();
-    const tracer = provider?.getTracer("ask-workflow");
+    const tracer = provider?.getTracer("ai");
 
     if (!tracer) {
       return askLLM({
