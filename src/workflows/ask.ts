@@ -3,6 +3,7 @@ import {
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers";
+import { trace, ROOT_CONTEXT, TraceFlags } from "@opentelemetry/api";
 import { askLLM, checkGuardrails } from "../agent";
 import { buildFeedbackButtons } from "../discord/components";
 import { createContainer } from "../container";
@@ -39,52 +40,67 @@ export interface AskWorkflowParams {
 export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
   private async checkGuardrailsStep(question: string, locale: string) {
     const container = createContainer();
-    const guardrailId = crypto.randomUUID();
-    const { tracer, integrations } = container.createTelemetryContext({
-      skipAgentSpan: true,
-      parentId: guardrailId,
-    });
+    const provider = container.createTracerProvider();
 
-    const traceId = tracer?.createTrace({
-      name: "ask-workflow",
-      input: { question, locale },
-    });
-
-    const startTime = new Date().toISOString();
-    const result = await checkGuardrails({
-      question,
-      openrouter: container.openrouter,
-      google: container.google,
-      openrouterModel: container.modelConfig.openrouterGuardModel,
-      aiStudioModel: container.modelConfig.aiStudioGuardModel,
-      locale,
-      integrations,
-    });
-    const endTime = new Date().toISOString();
-
-    if (tracer) {
-      tracer.createGuardrail({
-        id: guardrailId,
-        name: "check-guardrails",
-        input: question,
-        output: result,
-        startTime,
-        endTime,
+    if (!provider) {
+      const result = await checkGuardrails({
+        question,
+        openrouter: container.openrouter,
+        google: container.google,
+        openrouterModel: container.modelConfig.openrouterGuardModel,
+        aiStudioModel: container.modelConfig.aiStudioGuardModel,
+        locale,
       });
-      await tracer.flush();
+      return { ...result, traceId: undefined };
     }
 
-    return { ...result, traceId };
+    const tracer = provider.getTracer("ask-workflow");
+    let traceId: string | undefined;
+
+    try {
+      const result = await tracer.startActiveSpan(
+        "ask-workflow",
+        async (rootSpan) => {
+          traceId = rootSpan.spanContext().traceId;
+          rootSpan.setAttribute("question", question);
+          rootSpan.setAttribute("locale", locale);
+
+          const guardrailResult = await tracer.startActiveSpan(
+            "check-guardrails",
+            async (span) => {
+              const r = await checkGuardrails({
+                question,
+                openrouter: container.openrouter,
+                google: container.google,
+                openrouterModel: container.modelConfig.openrouterGuardModel,
+                aiStudioModel: container.modelConfig.aiStudioGuardModel,
+                locale,
+                tracer,
+              });
+              span.setAttribute("guardrails.relevant", r.relevant);
+              span.end();
+              return r;
+            },
+          );
+
+          rootSpan.end();
+          return guardrailResult;
+        },
+      );
+
+      return { ...result, traceId };
+    } finally {
+      await provider.forceFlush();
+    }
   }
 
   private async askLLMStep(question: string, locale: string, traceId?: string) {
     const container = createContainer();
-    const { tracer, integrations } = traceId
-      ? container.createTelemetryContext({ traceId, agentName: "ask-llm" })
-      : { tracer: undefined, integrations: undefined };
+    const provider = container.createTracerProvider();
+    const tracer = provider?.getTracer("ask-workflow");
 
-    try {
-      return await askLLM({
+    if (!tracer) {
+      return askLLM({
         question,
         openrouter: container.openrouter,
         google: container.google,
@@ -92,11 +108,43 @@ export class AskWorkflow extends WorkflowEntrypoint<Env, AskWorkflowParams> {
         aiStudioModel: container.modelConfig.aiStudioAskModel,
         tools: container.tools,
         locale,
-        integrations,
       });
-    } catch (error) {
-      await tracer?.flush();
-      throw error;
+    }
+
+    try {
+      const parentContext = traceId
+        ? trace.setSpanContext(ROOT_CONTEXT, {
+            traceId,
+            spanId: "aaaaaaaaaaaaaaaa",
+            traceFlags: TraceFlags.SAMPLED,
+            isRemote: true,
+          })
+        : undefined;
+
+      return await tracer.startActiveSpan(
+        "ask-llm",
+        {},
+        parentContext ?? ROOT_CONTEXT,
+        async (span) => {
+          try {
+            const result = await askLLM({
+              question,
+              openrouter: container.openrouter,
+              google: container.google,
+              openrouterModel: container.modelConfig.openrouterAskModel,
+              aiStudioModel: container.modelConfig.aiStudioAskModel,
+              tools: container.tools,
+              locale,
+              tracer,
+            });
+            return result;
+          } finally {
+            span.end();
+          }
+        },
+      );
+    } finally {
+      await provider!.forceFlush();
     }
   }
 

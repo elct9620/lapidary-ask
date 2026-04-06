@@ -64,6 +64,7 @@ describe("checkGuardrails", () => {
   });
 
   it("fail-opens when generateText throws an error", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockedGenerateText.mockRejectedValue(new Error("API error"));
 
     const result = await checkGuardrails({
@@ -162,6 +163,7 @@ describe("checkGuardrails", () => {
   });
 
   it("falls back to openrouter when google fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockedGenerateText
       .mockRejectedValueOnce(new Error("Google API error"))
       .mockResolvedValueOnce({
@@ -208,6 +210,7 @@ describe("checkGuardrails", () => {
   });
 
   it("fail-opens when both providers fail", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockedGenerateText
       .mockRejectedValueOnce(new Error("Google API error"))
       .mockRejectedValueOnce(new Error("OpenRouter API error"));
@@ -261,24 +264,24 @@ describe("checkGuardrails", () => {
     );
   });
 
-  it("passes integrations to generateText when provided", async () => {
+  it("passes tracer to generateText when provided", async () => {
     mockedGenerateText.mockResolvedValue({
       output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);
 
-    const mockIntegration = { flush: vi.fn().mockResolvedValue(undefined) };
+    const mockTracer = { startActiveSpan: vi.fn() } as any;
 
     await checkGuardrails({
       question: "Who maintains String?",
       openrouter: mockOpenrouter,
-      integrations: [mockIntegration as any],
+      tracer: mockTracer,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
         experimental_telemetry: {
           isEnabled: true,
-          integrations: [mockIntegration],
+          tracer: mockTracer,
         },
       }),
     );
@@ -434,7 +437,7 @@ describe("checkGuardrails", () => {
     });
   });
 
-  it("does not include experimental_telemetry when no integrations", async () => {
+  it("does not include experimental_telemetry when no tracer", async () => {
     mockedGenerateText.mockResolvedValue({
       output: { reasoning: "...", relevant: true, reason: "" },
     } as Awaited<ReturnType<typeof generateText>>);

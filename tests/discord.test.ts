@@ -293,11 +293,9 @@ describe("handleDiscordWebhook", () => {
     });
 
     it("sends Langfuse score when feedback is valid", async () => {
-      const mockFlush = vi.fn().mockResolvedValue(undefined);
-      const mockCreateScore = vi.fn();
+      const mockCreateScore = vi.fn().mockResolvedValue(undefined);
       mockCreateLangfuseClient.mockReturnValue({
         createScore: mockCreateScore,
-        flush: mockFlush,
       });
 
       const request = await makeSignedRequest({
@@ -325,7 +323,7 @@ describe("handleDiscordWebhook", () => {
         "user-feedback",
         -1, // down = -1
       );
-      expect(mockFlush).toHaveBeenCalledOnce();
+      expect(mockCreateScore).toHaveBeenCalledOnce();
     });
   });
 });

@@ -80,13 +80,11 @@ export function handleFeedbackInteraction(
 
   const client = container.createLangfuseClient();
   if (client) {
-    client.createScore(
+    pending = client.createScore(
       feedback.traceId,
       "user-feedback",
       feedback.direction === "up" ? 1 : -1,
     );
-
-    pending = client.flush();
   }
 
   return {

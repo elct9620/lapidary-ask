@@ -104,6 +104,7 @@ describe("askLLM", () => {
   });
 
   it("throws when both providers fail", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockedGenerateText
       .mockRejectedValueOnce(new Error("Google API error"))
       .mockRejectedValueOnce(new Error("OpenRouter API error"));
@@ -119,6 +120,7 @@ describe("askLLM", () => {
   });
 
   it("falls back to openrouter when google fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mockedGenerateText
       .mockRejectedValueOnce(new Error("Google API error"))
       .mockResolvedValueOnce({
@@ -206,31 +208,31 @@ describe("askLLM", () => {
     );
   });
 
-  it("passes experimental_telemetry when integrations provided", async () => {
+  it("passes experimental_telemetry when tracer provided", async () => {
     mockedGenerateText.mockResolvedValue({
       text: "response",
     } as Awaited<ReturnType<typeof generateText>>);
 
-    const mockIntegration = { onStart: vi.fn() };
+    const mockTracer = { startActiveSpan: vi.fn() } as any;
 
     await askLLM({
       question: "test question",
       openrouter: mockOpenrouter,
       tools: mockTools,
-      integrations: [mockIntegration],
+      tracer: mockTracer,
     });
 
     expect(mockedGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
         experimental_telemetry: {
           isEnabled: true,
-          integrations: [mockIntegration],
+          tracer: mockTracer,
         },
       }),
     );
   });
 
-  it("does not pass experimental_telemetry when no integrations", async () => {
+  it("does not pass experimental_telemetry when no tracer", async () => {
     mockedGenerateText.mockResolvedValue({
       text: "response",
     } as Awaited<ReturnType<typeof generateText>>);

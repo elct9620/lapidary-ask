@@ -1,10 +1,9 @@
 import { generateText, Output, type LanguageModel } from "ai";
-import type { TelemetryIntegration } from "ai";
+import type { Tracer } from "@opentelemetry/api";
 import type { GoogleGenerativeAIProvider } from "@ai-sdk/google";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { getLanguageName, DEFAULT_LOCALE, DOMAIN_DEFINITIONS } from "./prompt";
-import { buildTelemetryConfig } from "./telemetry-helpers";
 import { withGoogleFallback } from "./provider-fallback";
 import {
   DEFAULT_AI_STUDIO_GUARD_MODEL,
@@ -18,7 +17,7 @@ export interface CheckGuardrailsOptions {
   openrouterModel?: string;
   aiStudioModel?: string;
   locale?: string;
-  integrations?: TelemetryIntegration[];
+  tracer?: Tracer;
 }
 
 export interface GuardrailsResult {
@@ -113,14 +112,14 @@ async function generateGuardrails(
   model: LanguageModel,
   system: string,
   question: string,
-  integrations?: TelemetryIntegration[],
+  tracer?: Tracer,
 ): Promise<GuardrailsResult> {
   const { output } = await generateText({
     model,
     output: Output.object({ schema: guardrailsSchema }),
     system,
     prompt: question,
-    ...buildTelemetryConfig(integrations),
+    ...(tracer ? { experimental_telemetry: { isEnabled: true, tracer } } : {}),
   });
 
   return output ?? FAIL_OPEN;
@@ -137,7 +136,7 @@ export async function checkGuardrails(
       openrouterModel = DEFAULT_OPENROUTER_GUARD_MODEL,
       aiStudioModel = DEFAULT_AI_STUDIO_GUARD_MODEL,
       locale = DEFAULT_LOCALE,
-      integrations,
+      tracer,
     } = options;
 
     const system = buildGuardrailsSystemPrompt(locale);
@@ -148,7 +147,7 @@ export async function checkGuardrails(
       aiStudioModel,
       openrouterModel,
       label: "AI Studio guardrails",
-      run: (model) => generateGuardrails(model, system, question, integrations),
+      run: (model) => generateGuardrails(model, system, question, tracer),
     });
   } catch (error) {
     console.warn("Guardrails check failed entirely, failing open", error);

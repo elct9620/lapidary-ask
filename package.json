@@ -15,7 +15,9 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.57",
+    "@aotoki/edge-otel": "^0.1.0",
     "@openrouter/ai-sdk-provider": "^2.2.5",
+    "@opentelemetry/api": "^1.9.1",
     "ai": "^6.0.116",
     "discord-api-types": "^0.38.41",
     "discord-interactions": "^4.4.0",

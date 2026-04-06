@@ -1,17 +1,12 @@
-import {
-  generateText,
-  stepCountIs,
-  type LanguageModel,
-  type TelemetryIntegration,
-} from "ai";
+import { generateText, stepCountIs, type LanguageModel } from "ai";
 import type {
   GoogleGenerativeAIProvider,
   GoogleLanguageModelOptions,
 } from "@ai-sdk/google";
 import type { OpenRouterProvider } from "@openrouter/ai-sdk-provider";
+import type { Tracer } from "@opentelemetry/api";
 import { buildSystemPrompt, DEFAULT_LOCALE } from "./prompt";
 import type { Tools } from "./tools";
-import { buildTelemetryConfig } from "./telemetry-helpers";
 import { withGoogleFallback } from "./provider-fallback";
 import {
   DEFAULT_AI_STUDIO_ASK_MODEL,
@@ -26,7 +21,7 @@ export interface AskLLMOptions {
   aiStudioModel?: string;
   tools: Tools;
   locale?: string;
-  integrations?: TelemetryIntegration[];
+  tracer?: Tracer;
 }
 
 async function generateWithModel(
@@ -35,7 +30,7 @@ async function generateWithModel(
     system: string;
     prompt: string;
     tools: Tools;
-    integrations?: TelemetryIntegration[];
+    tracer?: Tracer;
     providerOptions?: { google: GoogleLanguageModelOptions };
   },
 ): Promise<string> {
@@ -45,7 +40,9 @@ async function generateWithModel(
     prompt: options.prompt,
     tools: options.tools,
     stopWhen: stepCountIs(30),
-    ...buildTelemetryConfig(options.integrations),
+    ...(options.tracer
+      ? { experimental_telemetry: { isEnabled: true, tracer: options.tracer } }
+      : {}),
     ...(options.providerOptions
       ? { providerOptions: options.providerOptions }
       : {}),
@@ -62,11 +59,11 @@ export async function askLLM(options: AskLLMOptions): Promise<string> {
     aiStudioModel = DEFAULT_AI_STUDIO_ASK_MODEL,
     tools,
     locale = DEFAULT_LOCALE,
-    integrations,
+    tracer,
   } = options;
 
   const system = buildSystemPrompt(locale);
-  const shared = { system, prompt: question, tools, integrations };
+  const shared = { system, prompt: question, tools, tracer };
 
   return withGoogleFallback({
     google,
