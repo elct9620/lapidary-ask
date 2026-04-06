@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { LangfuseClient } from "../src/telemetry/client";
-import { createLangfuseTracerProvider } from "../src/telemetry/provider";
 
 describe("LangfuseClient", () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
@@ -103,29 +102,5 @@ describe("LangfuseClient", () => {
 
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
-  });
-});
-
-describe("createLangfuseTracerProvider", () => {
-  it("returns a TracerProvider with getTracer and forceFlush", () => {
-    const provider = createLangfuseTracerProvider({
-      publicKey: "pk-test",
-      secretKey: "sk-test",
-    });
-
-    expect(provider).toBeDefined();
-    expect(typeof provider.getTracer).toBe("function");
-    expect(typeof provider.forceFlush).toBe("function");
-  });
-
-  it("returns a tracer from the provider", () => {
-    const provider = createLangfuseTracerProvider({
-      publicKey: "pk-test",
-      secretKey: "sk-test",
-    });
-
-    const tracer = provider.getTracer("test");
-    expect(tracer).toBeDefined();
-    expect(typeof tracer.startActiveSpan).toBe("function");
   });
 });

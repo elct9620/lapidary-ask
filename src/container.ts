@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createTracerProvider } from "@aotoki/edge-otel";
+import { langfuseExporter } from "@aotoki/edge-otel/exporters/langfuse";
 import { createTools } from "./agent/tools";
 import { patchDiscordResponse } from "./discord/api";
 import { createLangfuseClient } from "./telemetry/client";
-import { createLangfuseTracerProvider } from "./telemetry/provider";
 import {
   DEFAULT_AI_STUDIO_ASK_MODEL,
   DEFAULT_AI_STUDIO_GUARD_MODEL,
@@ -48,11 +49,14 @@ export function createContainer() {
     ) => patchDiscordResponse(env.DISCORD_APPLICATION_ID, token, payload),
     createTracerProvider: () => {
       if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) return null;
-      return createLangfuseTracerProvider({
-        publicKey: env.LANGFUSE_PUBLIC_KEY,
-        secretKey: env.LANGFUSE_SECRET_KEY,
-        baseUrl: env.LANGFUSE_BASE_URL || undefined,
-        environment: env.ENVIRONMENT || undefined,
+      return createTracerProvider({
+        ...langfuseExporter({
+          publicKey: env.LANGFUSE_PUBLIC_KEY,
+          secretKey: env.LANGFUSE_SECRET_KEY,
+          baseUrl: env.LANGFUSE_BASE_URL || undefined,
+          environment: env.ENVIRONMENT || undefined,
+        }),
+        serviceName: "ruby-lapidary-ask",
       });
     },
     createLangfuseClient: () =>
